@@ -1,7 +1,8 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
+import { getTotalSalaries } from "./salaries";
 
-export async function getDashboardData() {
+export async function getDashboardData(startDate, endDate) {
   try {
     const supabase = await createClient();
 
@@ -49,6 +50,8 @@ export async function getDashboardData() {
       .limit(5);
     
     if (!isOwner && userBranchId) transactionsQuery.eq("branch_id", userBranchId);
+    if (startDate) transactionsQuery.gte("created_at", startDate);
+    if (endDate) transactionsQuery.lte("created_at", endDate);
     const { data: recentTransactions } = await transactionsQuery;
 
     // 4. Get total revenue (completed transactions)
@@ -58,6 +61,8 @@ export async function getDashboardData() {
       .eq("status", "completed");
     
     if (!isOwner && userBranchId) revenueQuery.eq("branch_id", userBranchId);
+    if (startDate) revenueQuery.gte("created_at", startDate);
+    if (endDate) revenueQuery.lte("created_at", endDate);
     const { data: revenues } = await revenueQuery;
 
     const totalRevenue = revenues?.reduce((sum, t) => sum + Number(t.total), 0) || 0;
@@ -65,10 +70,11 @@ export async function getDashboardData() {
     // 5. Active services
     const servicesQuery = supabase
       .from("service_tickets")
-      .select("status")
-      .in("status", ["pending", "process", "done", "overdue"]);
+      .select("status");
     
     if (!isOwner && userBranchId) servicesQuery.eq("branch_id", userBranchId);
+    if (startDate) servicesQuery.gte("created_at", startDate);
+    if (endDate) servicesQuery.lte("created_at", endDate);
     const { data: activeServicesList } = await servicesQuery;
 
     const activeServices = {
@@ -86,7 +92,15 @@ export async function getDashboardData() {
       .limit(5);
     
     if (!isOwner && userBranchId) alertsQuery.eq("branch_id", userBranchId);
+    if (startDate) alertsQuery.gte("created_at", startDate);
+    if (endDate) alertsQuery.lte("created_at", endDate);
     const { data: serviceAlerts } = await alertsQuery;
+
+    // 7. Get Total Salaries (Manager/Owner only)
+    let totalSalary = 0;
+    if (profile?.role === "owner" || profile?.role === "manager") {
+      totalSalary = await getTotalSalaries(startDate, endDate);
+    }
 
     const mappedAlerts = (serviceAlerts || []).map(s => ({
       id: s.id,
@@ -104,11 +118,13 @@ export async function getDashboardData() {
         users: usersCount || 0,
         products: productsCount || 0,
         activeServices,
+        totalSalary: totalSalary,
       },
       recentTransactions: recentTransactions || [],
       sales7Days: [],
       revenueByBranch: [],
       serviceAlerts: mappedAlerts,
+      userRole: profile?.role
     };
   } catch (error) {
     console.error("Dashboard data error:", error);

@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { useState, useEffect } from "react";
 import { getDashboardData } from "@/app/actions/dashboard";
+import { getEmployees, upsertSalary } from "@/app/actions/salaries";
 import Link from "next/link";
 
 /* ============================
@@ -197,15 +198,62 @@ function ServiceAlerts({ serviceAlerts = [] }) {
 export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [employees, setEmployees] = useState([]);
+  const [showSalaryForm, setShowSalaryForm] = useState(false);
+  const [salaryForm, setSalaryForm] = useState({ profile_id: "", base_salary: "", bonus: "", notes: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Date Filter State
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1); // Default to start of month
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
 
   useEffect(() => {
     async function loadData() {
-      const dbData = await getDashboardData();
+      setLoading(true);
+      const dbData = await getDashboardData(startDate, endDate);
       setData(dbData);
+      
+      if (dbData.userRole === "owner" || dbData.userRole === "manager") {
+        const empList = await getEmployees();
+        setEmployees(empList);
+      }
+      
       setLoading(false);
     }
     loadData();
-  }, []);
+  }, [startDate, endDate]);
+
+  const handleSalarySubmit = async (e) => {
+    e.preventDefault();
+    if (!salaryForm.profile_id || !salaryForm.base_salary) return alert("Pilih pegawai dan isi gaji pokok!");
+    
+    setIsSubmitting(true);
+    try {
+      await upsertSalary({
+        ...salaryForm,
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
+        base_salary: Number(salaryForm.base_salary),
+        bonus: Number(salaryForm.bonus || 0)
+      });
+      alert("Gaji berhasil disimpan!");
+      setShowSalaryForm(false);
+      setSalaryForm({ profile_id: "", base_salary: "", bonus: "", notes: "" });
+      // Refresh dashboard data
+      const dbData = await getDashboardData(startDate, endDate);
+      setData(dbData);
+    } catch (err) {
+      alert("Gagal simpan gaji: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (loading || !data) {
     return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dari Supabase...</div>;
@@ -216,9 +264,34 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6 stagger-children">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-sm text-white/40 mt-1">Overview bisnis hari ini — Realtime</p>
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-sm text-white/40 mt-1">Overview bisnis — Realtime</p>
+        </div>
+
+        {/* Date Filter */}
+        <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
+          <div className="flex flex-col px-2 py-1">
+            <label className="text-[9px] uppercase font-bold text-white/30">Dari</label>
+            <input 
+              type="date" 
+              className="bg-transparent text-xs text-white focus:outline-none"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="w-px h-6 bg-white/10" />
+          <div className="flex flex-col px-2 py-1">
+            <label className="text-[9px] uppercase font-bold text-white/30">Sampai</label>
+            <input 
+              type="date" 
+              className="bg-transparent text-xs text-white focus:outline-none"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -259,7 +332,93 @@ export default function DashboardPage() {
           accentClass="rose"
           href="/pos/service"
         />
+        {data.userRole === "manager" && (
+          <KPICard
+            icon="wallet"
+            iconColor="#8B5CF6"
+            title="Total Gaji (Bulan Ini)"
+            value={formatRupiah(data.kpi.totalSalary || 0)}
+            subValue="Biaya operasional gaji"
+            accentClass="indigo"
+          />
+        )}
       </div>
+
+      {/* Salary Management Area (Owner & Manager) */}
+      {(data.userRole === "owner" || data.userRole === "manager") && (
+        <div className="glass-card p-5 animate-fade-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-400">payments</span>
+              <h3 className="text-sm font-semibold text-white">Input Gaji & Bonus Pegawai</h3>
+            </div>
+            <button 
+              onClick={() => setShowSalaryForm(!showSalaryForm)}
+              className="px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 text-xs font-semibold hover:bg-indigo-500/20 transition-colors"
+            >
+              {showSalaryForm ? "Tutup Form" : "Buka Form Input"}
+            </button>
+          </div>
+
+          {showSalaryForm && (
+            <form onSubmit={handleSalarySubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-fade-in">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Pegawai</label>
+                <select 
+                  className="input-field text-sm"
+                  value={salaryForm.profile_id}
+                  onChange={e => setSalaryForm({...salaryForm, profile_id: e.target.value})}
+                >
+                  <option value="">-- Pilih Pegawai --</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.role})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Gaji Pokok (Rp)</label>
+                <input 
+                  type="number" 
+                  className="input-field text-sm"
+                  placeholder="0"
+                  value={salaryForm.base_salary}
+                  onChange={e => setSalaryForm({...salaryForm, base_salary: e.target.value})}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Bonus (Kondisional)</label>
+                <input 
+                  type="number" 
+                  className="input-field text-sm"
+                  placeholder="0"
+                  value={salaryForm.bonus}
+                  onChange={e => setSalaryForm({...salaryForm, bonus: e.target.value})}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Keterangan Periode</label>
+                <input 
+                  type="text" 
+                  className="input-field text-sm"
+                  placeholder="e.g. Gaji April 2026"
+                  value={salaryForm.notes}
+                  onChange={e => setSalaryForm({...salaryForm, notes: e.target.value})}
+                />
+              </div>
+              <div className="flex items-end">
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="btn-gradient w-full py-2.5 text-sm flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">save</span>
+                  {isSubmitting ? "Menyimpan..." : "Simpan Gaji"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

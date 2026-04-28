@@ -88,6 +88,11 @@ const MENU = [
 export default function Sidebar({ collapsed, onToggle, user }) {
   const pathname = usePathname();
   const [expandedMenus, setExpandedMenus] = useState({});
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const role = user?.role || "kasir";
 
@@ -191,7 +196,11 @@ export default function Sidebar({ collapsed, onToggle, user }) {
 
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto py-3 px-3 flex flex-col gap-0.5">
-        {filteredMenu.map((item) => {
+        {!mounted ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+          </div>
+        ) : filteredMenu.map((item) => {
           const active = isParentActive(item);
           const hasChildren = item.children && item.children.length > 0;
           const isExpanded = expandedMenus[item.label];
