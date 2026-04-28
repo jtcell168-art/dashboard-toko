@@ -8,6 +8,12 @@ export default function Scanner({ onScan, onClose, title = "Scan Barcode / IMEI"
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // Check if browser supports camera and if it's HTTPS (required for camera)
+    if (!window.isSecureContext && window.location.hostname !== "localhost") {
+      setError("Kamera hanya dapat diakses melalui koneksi aman (HTTPS). Pastikan website menggunakan https://");
+      return;
+    }
+
     const html5QrCode = new Html5Qrcode("reader");
     const qrCodeSuccessCallback = (decodedText, decodedResult) => {
       onScan(decodedText);
@@ -19,15 +25,32 @@ export default function Scanner({ onScan, onClose, title = "Scan Barcode / IMEI"
       });
     };
 
-    const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+    const config = { 
+      fps: 10, 
+      qrbox: { width: 250, height: 150 },
+      aspectRatio: 1.0
+    };
 
-    html5QrCode.start(
-      { facingMode: "environment" }, // use back camera
-      config,
-      qrCodeSuccessCallback
-    ).catch(err => {
-      setError("Gagal mengakses kamera: " + err);
-    });
+    const startScanner = async () => {
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          qrCodeSuccessCallback
+        );
+      } catch (err) {
+        console.error("Scanner start error:", err);
+        if (err.includes("Permission denied")) {
+          setError("Izin kamera ditolak. Silakan aktifkan izin kamera di pengaturan browser Anda.");
+        } else if (err.includes("NotFoundException")) {
+          setError("Kamera belakang tidak ditemukan.");
+        } else {
+          setError("Gagal mengakses kamera. Pastikan tidak ada aplikasi lain yang sedang menggunakan kamera.");
+        }
+      }
+    };
+
+    startScanner();
 
     return () => {
       if (html5QrCode.isScanning) {
