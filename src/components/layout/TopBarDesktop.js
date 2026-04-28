@@ -8,14 +8,14 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
   const [showBranches, setShowBranches] = useState(false);
   const [branches, setBranches] = useState([]);
 
-  const isOwner = user?.role === "owner";
+  const hasBranchAccess = user?.role === "owner" || user?.role === "manager";
 
   useEffect(() => {
     async function loadBranches() {
       const supabase = createClient();
       const { data } = await supabase.from("branches").select("id, name").eq("is_active", true);
       if (data) {
-        if (isOwner) {
+        if (hasBranchAccess) {
           setBranches([
             { id: "all", label: "Semua Cabang" },
             ...data.map(b => ({ id: b.id, label: b.name }))
@@ -33,7 +33,7 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
       }
     }
     loadBranches();
-  }, [isOwner, user?.branch_id]);
+  }, [hasBranchAccess, user?.branch_id]);
 
   const currentBranch = branches.find((b) => b.id === branch) || (branches.length > 0 ? branches[0] : { id: "all", label: "Semua Cabang" });
 
@@ -62,12 +62,12 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
       {/* Branch Selector */}
       <div className="relative">
         <button
-          onClick={() => isOwner && setShowBranches(!showBranches)}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] transition-colors text-sm ${isOwner ? "hover:bg-white/[0.08]" : "cursor-default"}`}
+          onClick={() => hasBranchAccess && setShowBranches(!showBranches)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] transition-colors text-sm ${hasBranchAccess ? "hover:bg-white/[0.08]" : "cursor-default"}`}
         >
           <span className="material-symbols-outlined text-[18px] text-indigo-400">store</span>
           <span className="text-white/80">{currentBranch?.label}</span>
-          {isOwner && <span className="material-symbols-outlined text-[16px] text-white/40">expand_more</span>}
+          {hasBranchAccess && <span className="material-symbols-outlined text-[16px] text-white/40">expand_more</span>}
         </button>
 
         {showBranches && (
