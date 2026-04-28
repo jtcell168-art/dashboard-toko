@@ -134,7 +134,7 @@ export default function Sidebar({ collapsed, onToggle }) {
             className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center"
             style={{ background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }}
           >
-            <span className="text-white font-bold text-sm">L</span>
+            <span className="text-white font-bold text-sm">JT</span>
           </div>
           {!collapsed && (
             <span
@@ -145,7 +145,7 @@ export default function Sidebar({ collapsed, onToggle }) {
                 WebkitTextFillColor: "transparent",
               }}
             >
-              Lumina ERP
+              JT CELL GROUP
             </span>
           )}
         </div>
