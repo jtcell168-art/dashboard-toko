@@ -1,42 +1,193 @@
 "use client";
-import { useState } from "react";
-import { EXPENSES, BRANCHES, formatRupiah } from "@/data/mockData";
+import { useState, useEffect } from "react";
+import { formatRupiah } from "@/data/mockData";
+import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/app/actions/finance";
+import { getBranches } from "@/app/actions/branches";
+import { getCurrentUser } from "@/app/actions/auth";
 
 const CATEGORIES = ["Sewa Toko", "Listrik", "Internet", "Gaji", "Transportasi", "Maintenance", "Lainnya"];
 
 export default function ExpensesPage() {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ category: "", amount: "", branch: "", note: "" });
-  const total = EXPENSES.reduce((s, e) => s + e.amount, 0);
-  const handleAdd = () => { alert(`Biaya "${form.category}" ${formatRupiah(Number(form.amount))} ditambahkan! (mock)`); setShowForm(false); };
+  const [form, setForm] = useState({ category: "", amount: "", branchId: "", note: "" });
+  
+  const [expenses, setExpenses] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Edit State
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      const u = await getCurrentUser();
+      setCurrentUser(u);
+      
+      const [expData, branchData] = await Promise.all([
+        getExpenses(),
+        getBranches()
+      ]);
+      setExpenses(expData);
+      setBranches(branchData);
+      
+      if (u?.branch_id && branchData.find(b => b.id === u.branch_id)) {
+        setForm(f => ({ ...f, branchId: u.branch_id }));
+      } else if (branchData.length > 0) {
+        setForm(f => ({ ...f, branchId: branchData[0].id }));
+      }
+      setIsLoading(false);
+    }
+    load();
+  }, []);
+
+  const hasAccess = currentUser?.role === "owner" || currentUser?.role === "manager";
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+
+  const handleAdd = async () => {
+    if (!form.category || !form.amount || !form.branchId) return alert("Lengkapi data!");
+    try {
+      await addExpense(form);
+      alert(`Biaya berhasil ditambahkan!`);
+      setShowForm(false);
+      setForm({ ...form, category: "", amount: "", note: "" });
+      setExpenses(await getExpenses()); // reload
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm("Yakin hapus pengeluaran ini?")) {
+      try {
+        await deleteExpense(id);
+        setExpenses(expenses.filter(e => e.id !== id));
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+  };
+
+  const handleEdit = (expense) => {
+    setEditingId(expense.id);
+    setEditForm({
+      category: expense.category,
+      amount: expense.amount,
+      note: expense.note
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.category || !editForm.amount) return alert("Lengkapi data!");
+    try {
+      await updateExpense(editingId, editForm);
+      setEditingId(null);
+      setEditForm(null);
+      setExpenses(await getExpenses());
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between"><div><h1 className="text-xl md:text-2xl font-bold text-white">Biaya Operasional</h1><p className="text-sm text-white/40 mt-0.5">Kelola pengeluaran operasional toko</p></div><button onClick={() => setShowForm(!showForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">{showForm ? "close" : "add"}</span>{showForm ? "Batal" : "Tambah Biaya"}</button></div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Biaya Operasional</h1>
+          <p className="text-sm text-white/40 mt-0.5">Kelola pengeluaran operasional toko</p>
+        </div>
+        <button onClick={() => setShowForm(!showForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">{showForm ? "close" : "add"}</span>
+          {showForm ? "Batal" : "Tambah Biaya"}
+        </button>
+      </div>
 
-      <div className="kpi-card rose" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Biaya Bulan Ini</p><p className="text-2xl font-bold text-white tabular-nums">{formatRupiah(total)}</p></div>
+      <div className="kpi-card rose" style={{ padding: 16 }}>
+        <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Biaya Bulan Ini</p>
+        <p className="text-2xl font-bold text-white tabular-nums">{formatRupiah(total)}</p>
+      </div>
 
       {showForm && (
         <div className="glass-card p-5 flex flex-col gap-3 animate-fade-slide-up">
           <h3 className="text-sm font-semibold text-white">Tambah Biaya</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Kategori *</label><select className="input-field" value={form.category} onChange={e => setForm({...form, category: e.target.value})}><option value="">Pilih</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Jumlah *</label><input className="input-field text-right tabular-nums" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} placeholder="0" /></div>
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Cabang</label><select className="input-field" value={form.branch} onChange={e => setForm({...form, branch: e.target.value})}><option value="Semua">Semua Cabang</option>{BRANCHES.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Catatan</label><input className="input-field" value={form.note} onChange={e => setForm({...form, note: e.target.value})} placeholder="Keterangan" /></div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-white/40">Kategori *</label>
+              <select className="input-field" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
+                <option value="">Pilih</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-white/40">Jumlah *</label>
+              <input className="input-field text-right tabular-nums" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} placeholder="0" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-white/40">Cabang *</label>
+              <select className="input-field" value={form.branchId} onChange={e => setForm({...form, branchId: e.target.value})} disabled={currentUser?.role !== "owner"}>
+                <option value="">Pilih Cabang</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-white/40">Catatan</label>
+              <input className="input-field" value={form.note} onChange={e => setForm({...form, note: e.target.value})} placeholder="Keterangan" />
+            </div>
           </div>
-          <button onClick={handleAdd} disabled={!form.category || !form.amount} className="btn-gradient py-3 text-sm disabled:opacity-40">Simpan</button>
+          <button onClick={handleAdd} disabled={!form.category || !form.amount || !form.branchId} className="btn-gradient py-3 text-sm disabled:opacity-40 mt-2">Simpan</button>
         </div>
       )}
 
       <div className="glass-card overflow-hidden">
-        <div className="divide-y divide-white/[0.04]">{EXPENSES.map(e => (
-          <div key={e.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/[0.02] transition-colors">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-500/10"><span className="material-symbols-outlined text-[20px] text-red-400">receipt_long</span></div>
-            <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-white">{e.category}</p><p className="text-[10px] text-white/30 mt-0.5">{e.note} · {e.branch} · {e.date}</p></div>
-            <div className="text-right"><p className="text-sm font-bold text-white tabular-nums">{formatRupiah(e.amount)}</p>{e.recurring && <p className="text-[9px] text-white/20">Rutin</p>}</div>
+        {isLoading ? (
+          <div className="p-8 text-center text-white/50 animate-pulse">Memuat data...</div>
+        ) : expenses.length === 0 ? (
+          <div className="p-8 text-center text-white/50">Belum ada data pengeluaran.</div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {expenses.map(e => (
+              <div key={e.id} className="flex flex-col gap-2 p-4 hover:bg-white/[0.02] transition-colors">
+                
+                {editingId === e.id ? (
+                  <div className="bg-white/5 p-4 rounded-lg flex flex-col gap-3">
+                    <div className="flex items-center justify-between"><span className="text-sm font-semibold text-white">Edit Pengeluaran</span></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <select className="input-field" value={editForm.category} onChange={evt => setEditForm({...editForm, category: evt.target.value})}>
+                        <option value="">Pilih</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <input className="input-field tabular-nums" type="number" value={editForm.amount} onChange={evt => setEditForm({...editForm, amount: evt.target.value})} placeholder="Jumlah" />
+                      <input className="input-field" value={editForm.note} onChange={evt => setEditForm({...editForm, note: evt.target.value})} placeholder="Catatan" />
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => {setEditingId(null); setEditForm(null);}} className="px-4 py-2 text-xs text-white/50 hover:bg-white/10 rounded-lg">Batal</button>
+                      <button onClick={handleSaveEdit} className="btn-gradient px-4 py-2 text-xs">Simpan</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-500/10">
+                      <span className="material-symbols-outlined text-[20px] text-red-400">receipt_long</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white">{e.category}</p>
+                      <p className="text-[10px] text-white/30 mt-0.5">{e.note || "-"} · {e.branches?.name} · {new Date(e.date).toLocaleDateString("id-ID")}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-white tabular-nums">{formatRupiah(e.amount)}</p>
+                    </div>
+                    {hasAccess && (
+                      <div className="flex gap-1 ml-2">
+                        <button onClick={() => handleEdit(e)} className="p-1.5 text-white/30 hover:text-white transition-colors" title="Edit"><span className="material-symbols-outlined text-[16px]">edit</span></button>
+                        <button onClick={() => handleDelete(e.id)} className="p-1.5 text-white/30 hover:text-red-400 transition-colors" title="Hapus"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
+            ))}
           </div>
-        ))}</div>
+        )}
       </div>
     </div>
   );
