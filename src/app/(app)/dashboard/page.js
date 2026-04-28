@@ -13,6 +13,8 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from "recharts";
+import { useState, useEffect } from "react";
+import { getDashboardData } from "@/app/actions/dashboard";
 
 /* ============================
    KPI CARDS
@@ -123,7 +125,7 @@ function RevenueChart() {
 /* ============================
    RECENT TRANSACTIONS
    ============================ */
-function RecentTransactions() {
+function RecentTransactions({ transactions = [] }) {
   const typeIcons = { retail: "shopping_bag", service: "build", digital: "phone_iphone" };
   const typeColors = { retail: "#6366F1", service: "#F59E0B", digital: "#3B82F6" };
 
@@ -134,20 +136,22 @@ function RecentTransactions() {
         <button className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Lihat Semua →</button>
       </div>
       <div className="flex flex-col gap-1">
-        {RECENT_TRANSACTIONS.slice(0, 6).map((trx) => (
+        {transactions.length === 0 ? (
+          <p className="text-xs text-white/40 text-center py-4">Belum ada transaksi</p>
+        ) : transactions.map((trx) => (
           <div key={trx.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${typeColors[trx.type]}15` }}>
-              <span className="material-symbols-outlined text-[18px]" style={{ color: typeColors[trx.type] }}>
-                {typeIcons[trx.type]}
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${typeColors[trx.payment_method === 'cash' ? 'retail' : 'digital']}15` }}>
+              <span className="material-symbols-outlined text-[18px]" style={{ color: typeColors[trx.payment_method === 'cash' ? 'retail' : 'digital'] }}>
+                {typeIcons[trx.payment_method === 'cash' ? 'retail' : 'digital']}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white truncate">{trx.product}</p>
-              <p className="text-[10px] text-white/30">{trx.customer} · Cab {trx.branch}</p>
+              <p className="text-xs font-medium text-white truncate">{trx.profiles?.full_name || "Kasir"} — {trx.invoice_no}</p>
+              <p className="text-[10px] text-white/30 capitalize">{trx.payment_method} · {trx.status}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="text-xs font-semibold text-white tabular-nums">{formatRupiah(trx.amount)}</p>
-              <p className="text-[10px] text-white/25">{trx.time}</p>
+              <p className="text-xs font-semibold text-white">{formatRupiah(trx.total)}</p>
+              <p className="text-[10px] text-white/25">{new Date(trx.created_at).toLocaleDateString("id-ID")}</p>
             </div>
           </div>
         ))}
@@ -192,16 +196,30 @@ function ServiceAlerts() {
    DASHBOARD PAGE
    ============================ */
 export default function DashboardPage() {
-  const salesChange = calcChange(KPI_DATA.totalSalestoday, KPI_DATA.totalSalesYesterday);
-  const profitChange = calcChange(KPI_DATA.netProfitMonth, KPI_DATA.netProfitLastMonth);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      const dbData = await getDashboardData();
+      setData(dbData);
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
   const totalServices = KPI_DATA.activeServices.pending + KPI_DATA.activeServices.process + KPI_DATA.activeServices.done;
+
+  if (loading) {
+    return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dari Supabase...</div>;
+  }
 
   return (
     <div className="flex flex-col gap-6 stagger-children">
       {/* Page Header */}
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-sm text-white/40 mt-1">Overview bisnis hari ini — 27 April 2026</p>
+        <p className="text-sm text-white/40 mt-1">Overview bisnis hari ini — Realtime</p>
       </div>
 
       {/* KPI Cards */}
@@ -209,36 +227,34 @@ export default function DashboardPage() {
         <KPICard
           icon="payments"
           iconColor="#6366F1"
-          title="Total Penjualan Hari Ini"
-          value={formatRupiah(KPI_DATA.totalSalestoday)}
-          subValue={`vs. kemarin ${formatRupiah(KPI_DATA.totalSalesYesterday)}`}
-          trend={Number(salesChange)}
+          title="Total Pendapatan"
+          value={formatRupiah(data.kpi.revenue)}
+          subValue="Dari semua transaksi sukses"
           accentClass="indigo"
         />
         <KPICard
-          icon="build"
+          icon="shopping_cart"
           iconColor="#F59E0B"
-          title="Servis Aktif"
-          value={totalServices}
-          subValue={`${KPI_DATA.activeServices.pending} pending · ${KPI_DATA.activeServices.process} proses · ${KPI_DATA.activeServices.done} selesai`}
+          title="Total Produk"
+          value={data.kpi.products}
+          subValue="Di database"
           accentClass="amber"
         />
         <KPICard
-          icon="inventory"
-          iconColor="#EF4444"
-          title="Stok Menipis"
-          value={KPI_DATA.lowStockAlerts}
-          subValue="Produk perlu restock"
-          accentClass="rose"
+          icon="group"
+          iconColor="#10B981"
+          title="Total Pegawai"
+          value={data.kpi.users}
+          subValue="User terdaftar"
+          accentClass="emerald"
         />
         <KPICard
-          icon="trending_up"
-          iconColor="#10B981"
-          title="Laba Bersih Bulan Ini"
-          value={formatRupiah(KPI_DATA.netProfitMonth)}
-          subValue={`vs. bulan lalu ${formatRupiah(KPI_DATA.netProfitLastMonth)}`}
-          trend={Number(profitChange)}
-          accentClass="emerald"
+          icon="build"
+          iconColor="#EF4444"
+          title="Servis Aktif"
+          value={totalServices}
+          subValue={`${KPI_DATA.activeServices.pending} pending · ${KPI_DATA.activeServices.process} proses`}
+          accentClass="rose"
         />
       </div>
 
@@ -250,7 +266,7 @@ export default function DashboardPage() {
 
       {/* Activity Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RecentTransactions />
+        <RecentTransactions transactions={data.recentTransactions} />
         <ServiceAlerts />
       </div>
     </div>
