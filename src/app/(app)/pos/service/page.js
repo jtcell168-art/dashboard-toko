@@ -172,7 +172,7 @@ function Step1CustomerDevice({ formData, errors, updateField }) {
         <h3 className="text-lg font-semibold text-white">Customer Info</h3>
       </div>
       <FormField label="Customer Name" required error={errors.customerName}>
-        <input className="input-field" placeholder="e.g. Budi Santoso" value={formData.customerName} onChange={(e) => updateField("customerName", e.target.value)} />
+        <input className="input-field" placeholder="e.g. Tarson" value={formData.customerName} onChange={(e) => updateField("customerName", e.target.value)} />
       </FormField>
       <FormField label="Phone Number" required error={errors.phoneNumber}>
         <div className="relative flex items-center">
