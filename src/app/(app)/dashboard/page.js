@@ -1,28 +1,22 @@
 "use client";
 
-import {
-  KPI_DATA,
-  SALES_7DAYS,
-  REVENUE_BY_BRANCH,
-  RECENT_TRANSACTIONS,
-  SERVICE_ALERTS,
-  formatRupiah,
-  calcChange,
-} from "@/data/mockData";
+import { formatRupiah } from "@/data/mockData";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from "recharts";
 import { useState, useEffect } from "react";
 import { getDashboardData } from "@/app/actions/dashboard";
+import Link from "next/link";
 
 /* ============================
    KPI CARDS
    ============================ */
-function KPICard({ icon, iconColor, title, value, subValue, trend, accentClass }) {
+function KPICard({ icon, iconColor, title, value, subValue, trend, accentClass, href }) {
   const isPositive = trend > 0;
-  return (
-    <div className={`kpi-card ${accentClass}`}>
+  
+  const CardContent = (
+    <div className={`kpi-card ${accentClass} ${href ? 'hover:scale-[1.02] cursor-pointer transition-transform' : ''}`}>
       <div className="flex items-start justify-between mb-3">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -46,12 +40,17 @@ function KPICard({ icon, iconColor, title, value, subValue, trend, accentClass }
       {subValue && <p className="text-[10px] text-white/25 mt-0.5">{subValue}</p>}
     </div>
   );
+
+  if (href) {
+    return <Link href={href} className="block">{CardContent}</Link>;
+  }
+  return CardContent;
 }
 
 /* ============================
    SALES CHART
    ============================ */
-function SalesChart() {
+function SalesChart({ sales7Days = [] }) {
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload) return null;
     return (
@@ -69,31 +68,25 @@ function SalesChart() {
   return (
     <div className="chart-card">
       <h3 className="text-sm font-semibold text-white mb-4">Penjualan 7 Hari Terakhir</h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <AreaChart data={SALES_7DAYS}>
-          <defs>
-            <linearGradient id="gradA" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="gradB" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="gradC" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#A78BFA" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#A78BFA" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="day" />
-          <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
-          <Tooltip content={<CustomTooltip />} />
-          <Area type="monotone" dataKey="cabA" name="Cabang A" stroke="#6366F1" fill="url(#gradA)" strokeWidth={2} />
-          <Area type="monotone" dataKey="cabB" name="Cabang B" stroke="#8B5CF6" fill="url(#gradB)" strokeWidth={2} />
-          <Area type="monotone" dataKey="cabC" name="Cabang C" stroke="#A78BFA" fill="url(#gradC)" strokeWidth={2} />
-        </AreaChart>
-      </ResponsiveContainer>
+      {sales7Days.length === 0 ? (
+        <div className="h-[220px] flex items-center justify-center text-white/30 text-sm">Belum ada data penjualan</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={sales7Days}>
+            <defs>
+              <linearGradient id="gradA" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="day" />
+            <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="total" name="Total" stroke="#6366F1" fill="url(#gradA)" strokeWidth={2} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
@@ -101,23 +94,27 @@ function SalesChart() {
 /* ============================
    REVENUE BAR CHART
    ============================ */
-function RevenueChart() {
+function RevenueChart({ revenueByBranch = [] }) {
   return (
     <div className="chart-card">
       <h3 className="text-sm font-semibold text-white mb-4">Revenue per Cabang (Bulan Ini)</h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={REVENUE_BY_BRANCH} layout="vertical" barCategoryGap="30%">
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis type="number" tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
-          <YAxis type="category" dataKey="branch" width={80} />
-          <Tooltip formatter={(v) => formatRupiah(v)} />
-          <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
-            {REVENUE_BY_BRANCH.map((entry, i) => (
-              <Cell key={i} fill={entry.color} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      {revenueByBranch.length === 0 ? (
+        <div className="h-[220px] flex items-center justify-center text-white/30 text-sm">Belum ada data revenue</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={revenueByBranch} layout="vertical" barCategoryGap="30%">
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis type="number" tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
+            <YAxis type="category" dataKey="branch" width={80} />
+            <Tooltip formatter={(v) => formatRupiah(v)} />
+            <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
+              {revenueByBranch.map((entry, i) => (
+                <Cell key={i} fill={entry.color || "#6366F1"} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
@@ -133,7 +130,7 @@ function RecentTransactions({ transactions = [] }) {
     <div className="chart-card">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white">Transaksi Terakhir</h3>
-        <button className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Lihat Semua →</button>
+        <Link href="/reports/pnl" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Lihat Semua →</Link>
       </div>
       <div className="flex flex-col gap-1">
         {transactions.length === 0 ? (
@@ -163,15 +160,17 @@ function RecentTransactions({ transactions = [] }) {
 /* ============================
    SERVICE ALERTS
    ============================ */
-function ServiceAlerts() {
+function ServiceAlerts({ serviceAlerts = [] }) {
   return (
     <div className="chart-card">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white">Servis Perlu Perhatian</h3>
-        <span className="badge danger">{SERVICE_ALERTS.filter((s) => s.status === "overdue").length} overdue</span>
+        <span className="badge danger">{serviceAlerts.filter((s) => s.status === "overdue").length} overdue</span>
       </div>
       <div className="flex flex-col gap-1">
-        {SERVICE_ALERTS.map((srv) => (
+        {serviceAlerts.length === 0 ? (
+          <p className="text-xs text-white/40 text-center py-4">Belum ada servis pending</p>
+        ) : serviceAlerts.map((srv) => (
           <div key={srv.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${srv.status === "overdue" ? "bg-red-500/10" : "bg-amber-500/10"}`}>
               <span className={`material-symbols-outlined text-[18px] ${srv.status === "overdue" ? "text-red-400" : "text-amber-400"}`}>
@@ -208,11 +207,11 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const totalServices = KPI_DATA.activeServices.pending + KPI_DATA.activeServices.process + KPI_DATA.activeServices.done;
-
-  if (loading) {
+  if (loading || !data) {
     return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dari Supabase...</div>;
   }
+
+  const totalServices = data.kpi.activeServices.pending + data.kpi.activeServices.process + data.kpi.activeServices.done;
 
   return (
     <div className="flex flex-col gap-6 stagger-children">
@@ -231,6 +230,7 @@ export default function DashboardPage() {
           value={formatRupiah(data.kpi.revenue)}
           subValue="Dari semua transaksi sukses"
           accentClass="indigo"
+          href="/reports/pnl"
         />
         <KPICard
           icon="shopping_cart"
@@ -239,6 +239,7 @@ export default function DashboardPage() {
           value={data.kpi.products}
           subValue="Di database"
           accentClass="amber"
+          href="/inventory"
         />
         <KPICard
           icon="group"
@@ -247,27 +248,29 @@ export default function DashboardPage() {
           value={data.kpi.users}
           subValue="User terdaftar"
           accentClass="emerald"
+          href="/settings/users"
         />
         <KPICard
           icon="build"
           iconColor="#EF4444"
           title="Servis Aktif"
           value={totalServices}
-          subValue={`${KPI_DATA.activeServices.pending} pending · ${KPI_DATA.activeServices.process} proses`}
+          subValue={`${data.kpi.activeServices.pending} pending · ${data.kpi.activeServices.process} proses`}
           accentClass="rose"
+          href="/pos/service"
         />
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SalesChart />
-        <RevenueChart />
+        <SalesChart sales7Days={data.sales7Days} />
+        <RevenueChart revenueByBranch={data.revenueByBranch} />
       </div>
 
       {/* Activity Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RecentTransactions transactions={data.recentTransactions} />
-        <ServiceAlerts />
+        <ServiceAlerts serviceAlerts={data.serviceAlerts} />
       </div>
     </div>
   );

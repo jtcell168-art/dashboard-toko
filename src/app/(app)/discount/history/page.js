@@ -1,27 +1,59 @@
 "use client";
-import { DISCOUNT_HISTORY, formatRupiah } from "@/data/mockData";
+import { useState, useEffect } from "react";
+import { formatRupiah } from "@/data/mockData";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DiscountHistoryPage() {
+  const [data, setData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      // Transaksi yang punya diskon
+      const { data: trx } = await supabase
+        .from("transactions")
+        .select("*, profiles(full_name)")
+        .gt("discount_amount", 0)
+        .order("created_at", { ascending: false });
+        
+      setData(trx || []);
+      setIsLoading(false);
+    }
+    load();
+  }, []);
+
+  const totalDiscount = data.reduce((sum, d) => sum + Number(d.discount_amount || 0), 0);
+  const avgDiscount = data.length > 0 ? data.reduce((sum, d) => sum + Number(d.discount_percent || 0), 0) / data.length : 0;
+
   return (
     <div className="flex flex-col gap-5">
       <div><h1 className="text-xl md:text-2xl font-bold text-white">Riwayat Diskon</h1><p className="text-sm text-white/40 mt-0.5">Semua diskon yang pernah diberikan</p></div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <div className="kpi-card indigo" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Diskon</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(DISCOUNT_HISTORY.reduce((s, d) => s + d.discountAmount, 0))}</p></div>
-        <div className="kpi-card amber" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Jumlah Transaksi</p><p className="text-xl font-bold text-white">{DISCOUNT_HISTORY.length}</p></div>
-        <div className="kpi-card emerald hidden lg:block" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Rata-rata Diskon</p><p className="text-xl font-bold text-white">{(DISCOUNT_HISTORY.reduce((s, d) => s + d.discountPercent, 0) / DISCOUNT_HISTORY.length).toFixed(1)}%</p></div>
+        <div className="kpi-card indigo" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Diskon</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(totalDiscount)}</p></div>
+        <div className="kpi-card amber" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Jumlah Transaksi</p><p className="text-xl font-bold text-white">{data.length}</p></div>
+        <div className="kpi-card emerald hidden lg:block" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Rata-rata Diskon</p><p className="text-xl font-bold text-white">{avgDiscount.toFixed(1)}%</p></div>
       </div>
 
       <div className="glass-card overflow-hidden">
-        <div className="hidden md:block overflow-x-auto">
-          <table className="data-table"><thead><tr><th>Tanggal</th><th>No. Trx</th><th>Produk</th><th style={{textAlign:"right"}}>Harga Asli</th><th style={{textAlign:"center"}}>Diskon</th><th style={{textAlign:"right"}}>Potongan</th><th style={{textAlign:"right"}}>Harga Final</th><th>Diberikan Oleh</th></tr></thead>
-            <tbody>{DISCOUNT_HISTORY.map(d => (
-              <tr key={d.id}><td className="text-xs text-white/40">{d.date}</td><td><code className="text-[11px] text-white/40 font-mono">{d.trxId}</code></td><td className="text-sm font-semibold text-white">{d.product}</td><td style={{textAlign:"right"}} className="text-xs text-white/50 tabular-nums">{formatRupiah(d.originalPrice)}</td><td style={{textAlign:"center"}}><span className="badge warning">{d.discountPercent}%</span></td><td style={{textAlign:"right"}} className="text-xs text-red-400 tabular-nums">-{formatRupiah(d.discountAmount)}</td><td style={{textAlign:"right"}} className="text-sm font-semibold text-white tabular-nums">{formatRupiah(d.finalPrice)}</td><td className="text-xs text-white/40">{d.givenBy}</td></tr>
-            ))}</tbody></table>
-        </div>
-        <div className="md:hidden divide-y divide-white/[0.04]">{DISCOUNT_HISTORY.map(d => (
-          <div key={d.id} className="px-4 py-3.5"><div className="flex justify-between"><p className="text-sm font-semibold text-white">{d.product}</p><span className="badge warning">{d.discountPercent}%</span></div><p className="text-xs text-white/40 mt-1">{d.givenBy} · {d.date}</p><div className="flex justify-between mt-1"><span className="text-xs text-white/30 line-through">{formatRupiah(d.originalPrice)}</span><span className="text-sm font-bold text-white tabular-nums">{formatRupiah(d.finalPrice)}</span></div></div>
-        ))}</div>
+        {isLoading ? (
+          <div className="p-8 text-center text-white/50 animate-pulse">Memuat data...</div>
+        ) : data.length === 0 ? (
+          <div className="p-8 text-center text-white/50">Belum ada riwayat diskon.</div>
+        ) : (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="data-table"><thead><tr><th>Tanggal</th><th>No. Trx</th><th>Customer</th><th style={{textAlign:"right"}}>Harga Asli</th><th style={{textAlign:"center"}}>Diskon</th><th style={{textAlign:"right"}}>Potongan</th><th style={{textAlign:"right"}}>Harga Final</th><th>Kasir</th></tr></thead>
+                <tbody>{data.map(d => (
+                  <tr key={d.id}><td className="text-xs text-white/40">{new Date(d.created_at).toLocaleDateString("id-ID")}</td><td><code className="text-[11px] text-white/40 font-mono">{d.invoice_no}</code></td><td className="text-sm font-semibold text-white">{d.customer_name || "-"}</td><td style={{textAlign:"right"}} className="text-xs text-white/50 tabular-nums">{formatRupiah(d.subtotal)}</td><td style={{textAlign:"center"}}><span className="badge warning">{d.discount_percent}%</span></td><td style={{textAlign:"right"}} className="text-xs text-red-400 tabular-nums">-{formatRupiah(d.discount_amount)}</td><td style={{textAlign:"right"}} className="text-sm font-semibold text-white tabular-nums">{formatRupiah(d.total)}</td><td className="text-xs text-white/40">{d.profiles?.full_name}</td></tr>
+                ))}</tbody></table>
+            </div>
+            <div className="md:hidden divide-y divide-white/[0.04]">{data.map(d => (
+              <div key={d.id} className="px-4 py-3.5"><div className="flex justify-between"><p className="text-sm font-semibold text-white">{d.invoice_no}</p><span className="badge warning">{d.discount_percent}%</span></div><p className="text-xs text-white/40 mt-1">{d.profiles?.full_name} · {new Date(d.created_at).toLocaleDateString("id-ID")}</p><div className="flex justify-between mt-1"><span className="text-xs text-white/30 line-through">{formatRupiah(d.subtotal)}</span><span className="text-sm font-bold text-white tabular-nums">{formatRupiah(d.total)}</span></div></div>
+            ))}</div>
+          </>
+        )}
       </div>
     </div>
   );

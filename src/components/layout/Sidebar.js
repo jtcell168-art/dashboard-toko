@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { logout } from "@/app/actions/auth";
 
 const MENU = [
@@ -85,20 +85,58 @@ const MENU = [
   },
 ];
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({ collapsed, onToggle, user }) {
   const pathname = usePathname();
   const [expandedMenus, setExpandedMenus] = useState({});
+
+  const role = user?.role || "kasir";
+
+  const filteredMenu = useMemo(() => {
+    return MENU.map(item => {
+      // 1. Teknikal Role Restriction
+      if (role === "teknisi") {
+        if (item.label === "Dashboard") return item;
+        if (item.label === "Point of Sale") {
+          return {
+            ...item,
+            children: item.children.filter(c => c.label === "Servis HP")
+          };
+        }
+        return null;
+      }
+
+      // 2. Kasir Role Restriction
+      if (role === "kasir") {
+        if (item.label === "Pengaturan") return null;
+        if (item.label === "Purchase Order") return null;
+        if (item.label === "Keuangan") {
+          return {
+            ...item,
+            children: item.children.filter(c => ["Kasbon Karyawan", "Cicilan"].includes(c.label))
+          };
+        }
+        if (item.label === "Laporan") {
+          return {
+            ...item,
+            children: item.children.filter(c => ["Produktivitas Servis", "Laporan Kasbon", "Laporan Cicilan"].includes(c.label))
+          };
+        }
+      }
+
+      return item;
+    }).filter(Boolean);
+  }, [role]);
 
   // Auto-expand active parent menus on first render
   useEffect(() => {
     const initialExpanded = {};
-    MENU.forEach((item) => {
+    filteredMenu.forEach((item) => {
       if (item.children?.some((c) => pathname === c.href || pathname?.startsWith(c.href + "/"))) {
         initialExpanded[item.label] = true;
       }
     });
     setExpandedMenus((prev) => ({ ...prev, ...initialExpanded }));
-  }, [pathname]);
+  }, [pathname, filteredMenu]);
 
   const toggleMenu = (label) => {
     setExpandedMenus((prev) => ({
@@ -153,7 +191,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto py-3 px-3 flex flex-col gap-0.5">
-        {MENU.map((item) => {
+        {filteredMenu.map((item) => {
           const active = isParentActive(item);
           const hasChildren = item.children && item.children.length > 0;
           const isExpanded = expandedMenus[item.label];

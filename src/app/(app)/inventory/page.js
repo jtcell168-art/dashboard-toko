@@ -54,6 +54,7 @@ export default function InventoryPage() {
   }, []);
 
   const hasAccess = currentUser?.role === "owner" || currentUser?.role === "manager";
+  const canSeeBuyPrice = currentUser?.role === "owner" || currentUser?.role === "manager";
 
   const filtered = useMemo(() => {
     let items = [...dbProducts];
@@ -167,10 +168,12 @@ export default function InventoryPage() {
                 {ADD_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white/40">Harga Beli</label>
-              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-white/20">Rp</span><input className="input-field pl-10 text-right tabular-nums" type="number" placeholder="0" value={addForm.buyPrice} onChange={e => setAddForm({...addForm, buyPrice: e.target.value})} /></div>
-            </div>
+            {canSeeBuyPrice && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-white/40">Harga Beli</label>
+                <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-white/20">Rp</span><input className="input-field pl-10 text-right tabular-nums" type="number" placeholder="0" value={addForm.buyPrice} onChange={e => setAddForm({...addForm, buyPrice: e.target.value})} /></div>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-white/40">Harga Jual</label>
               <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-white/20">Rp</span><input className="input-field pl-10 text-right tabular-nums" type="number" placeholder="0" value={addForm.sellPrice} onChange={e => setAddForm({...addForm, sellPrice: e.target.value})} /></div>
@@ -184,7 +187,7 @@ export default function InventoryPage() {
               </div>
             </div>
           </div>
-          {addForm.buyPrice && addForm.sellPrice && Number(addForm.sellPrice) > Number(addForm.buyPrice) && (
+          {canSeeBuyPrice && addForm.buyPrice && addForm.sellPrice && Number(addForm.sellPrice) > Number(addForm.buyPrice) && (
             <div className="flex items-center gap-2 bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-3">
               <span className="material-symbols-outlined text-emerald-400 text-[16px]">trending_up</span>
               <p className="text-xs text-emerald-300/80 font-medium">Margin: {formatRupiah(Number(addForm.sellPrice) - Number(addForm.buyPrice))} ({((Number(addForm.sellPrice) - Number(addForm.buyPrice)) / Number(addForm.buyPrice) * 100).toFixed(1)}%)</p>
@@ -279,7 +282,7 @@ export default function InventoryPage() {
                 <th style={{ textAlign: "center" }}>Cab. B</th>
                 <th style={{ textAlign: "center" }}>Cab. C</th>
                 <th style={{ textAlign: "center" }}>Total</th>
-                <th style={{ textAlign: "right" }}>Harga Beli</th>
+                {canSeeBuyPrice && <th style={{ textAlign: "right" }}>Harga Beli</th>}
                 <th style={{ textAlign: "right" }}>Harga Jual</th>
                 <th style={{ textAlign: "center" }}>Aksi</th>
               </tr>
@@ -311,9 +314,11 @@ export default function InventoryPage() {
                         {total}
                       </span>
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <span className="text-xs text-white/60 tabular-nums">{formatRupiah(product.buyPrice)}</span>
-                    </td>
+                    {canSeeBuyPrice && (
+                      <td style={{ textAlign: "right" }}>
+                        <span className="text-xs text-white/60 tabular-nums">{formatRupiah(product.buyPrice)}</span>
+                      </td>
+                    )}
                     <td style={{ textAlign: "right" }}>
                       {product.sellPrice > 0 ? (
                         <span className="text-xs text-white font-semibold tabular-nums">{formatRupiah(product.sellPrice)}</span>
@@ -354,7 +359,9 @@ export default function InventoryPage() {
               <div className="flex flex-col gap-1 lg:col-span-2"><label className="text-[10px] text-white/30">Nama</label><input className="input-field text-sm" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} /></div>
               <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">SKU</label><input className="input-field text-sm font-mono uppercase" value={editForm.sku} onChange={e => setEditForm({...editForm, sku: e.target.value.toUpperCase()})} /></div>
               <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Kategori</label><select className="input-field text-sm" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}><option value="HP">HP</option><option value="Aksesori">Aksesori</option><option value="Sparepart">Sparepart</option></select></div>
-              <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Harga Beli</label><input className="input-field text-sm text-right tabular-nums" type="number" value={editForm.buyPrice} onChange={e => setEditForm({...editForm, buyPrice: e.target.value})} /></div>
+              {canSeeBuyPrice && (
+                <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Harga Beli</label><input className="input-field text-sm text-right tabular-nums" type="number" value={editForm.buyPrice} onChange={e => setEditForm({...editForm, buyPrice: e.target.value})} /></div>
+              )}
               <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Harga Jual</label><input className="input-field text-sm text-right tabular-nums" type="number" value={editForm.sellPrice} onChange={e => setEditForm({...editForm, sellPrice: e.target.value})} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3 mt-3 max-w-xs">

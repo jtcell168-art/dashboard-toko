@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { applyTheme } from "@/components/ThemeLoader";
+import { createClient } from "@/lib/supabase/client";
 
 const SETTINGS = [
   { key: "storeName", label: "Nama Toko", value: "Lumina ERP", type: "text" },
@@ -54,6 +55,8 @@ const THEMES = [
 export default function GeneralSettingsPage() {
   const [settings, setSettings] = useState(SETTINGS.map(s => ({ ...s })));
   const [activeTheme, setActiveTheme] = useState("dark");
+  const [isOwner, setIsOwner] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Load saved theme on mount
   useEffect(() => {
@@ -61,6 +64,19 @@ export default function GeneralSettingsPage() {
     if (saved) {
       setActiveTheme(saved);
     }
+    
+    // Check role
+    async function checkRole() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+        if (profile && profile.role === "owner") {
+          setIsOwner(true);
+        }
+      }
+    }
+    checkRole();
   }, []);
 
   const selectTheme = (themeId) => {
@@ -71,6 +87,30 @@ export default function GeneralSettingsPage() {
 
   const update = (key, val) => setSettings(prev => prev.map(s => s.key === key ? { ...s, value: val } : s));
   const handleSave = () => alert("Pengaturan disimpan! (mock)");
+
+  const handleResetDatabase = async () => {
+    if (!confirm("PERINGATAN BAHAYA!\n\nApakah Anda yakin ingin MENGHAPUS SEMUA DATA TRANSAKSI (termasuk kasbon, cicilan, PO, hutang)?\nTindakan ini TIDAK BISA dibatalkan.")) return;
+    
+    const confirmText = prompt("Ketik 'HAPUS SEMUA' untuk melanjutkan:");
+    if (confirmText !== "HAPUS SEMUA") {
+      alert("Reset dibatalkan.");
+      return;
+    }
+
+    try {
+      setIsResetting(true);
+      const supabase = createClient();
+      const { error } = await supabase.rpc("reset_all_transactions");
+      if (error) throw error;
+      
+      alert("Berhasil! Semua data transaksi telah dihapus dari database.");
+      window.location.reload();
+    } catch (error) {
+      alert("Gagal mereset data: " + error.message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
@@ -142,6 +182,25 @@ export default function GeneralSettingsPage() {
       </div>
 
       <button onClick={handleSave} className="btn-gradient py-3 text-sm flex items-center justify-center gap-2"><span className="material-symbols-outlined text-[18px]">save</span>Simpan Pengaturan</button>
+
+      {isOwner && (
+        <div className="glass-card p-5 flex flex-col gap-4 mt-8 border-red-500/30 border">
+          <h3 className="text-sm font-semibold text-red-400 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">warning</span>
+            Danger Zone
+          </h3>
+          <p className="text-xs text-white/50">
+            Hanya <strong>Owner</strong> yang dapat melihat area ini. Gunakan fitur ini untuk menghapus semua data transaksi palsu/dummy dan memulai dengan data bersih.
+          </p>
+          <button 
+            onClick={handleResetDatabase} 
+            disabled={isResetting}
+            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+          >
+            {isResetting ? "Menghapus Data..." : "Hapus Semua Data Transaksi"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

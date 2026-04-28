@@ -18,6 +18,7 @@ export default function MainLayout({ children, user }) {
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        user={user}
       />
 
       {/* Mobile Sidebar Overlay */}
@@ -28,7 +29,7 @@ export default function MainLayout({ children, user }) {
             onClick={() => setMobileMenuOpen(false)}
           />
           <div className="fixed top-0 left-0 h-dvh w-[280px] z-[50] animate-slide-in-right">
-            <Sidebar collapsed={false} onToggle={() => setMobileMenuOpen(false)} />
+            <Sidebar collapsed={false} onToggle={() => setMobileMenuOpen(false)} user={user} />
           </div>
         </div>
       )}

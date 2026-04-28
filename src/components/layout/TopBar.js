@@ -24,7 +24,7 @@ export default function TopBar({ sidebarWidth = 256, onMobileMenuToggle }) {
             WebkitTextFillColor: "transparent",
           }}
         >
-          Lumina ERP
+          JT CELL GROUP
         </Link>
       </div>
 

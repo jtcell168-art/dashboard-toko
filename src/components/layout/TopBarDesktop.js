@@ -1,19 +1,41 @@
 "use client";
 
-import { useState } from "react";
-
-const BRANCHES = [
-  { id: "all", label: "Semua Cabang" },
-  { id: "a", label: "Cabang A — Pusat" },
-  { id: "b", label: "Cabang B — Mall" },
-  { id: "c", label: "Cabang C — Ruko" },
-];
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function TopBarDesktop({ sidebarWidth = 256, user }) {
   const [branch, setBranch] = useState(user?.branch_id || "all");
   const [showBranches, setShowBranches] = useState(false);
+  const [branches, setBranches] = useState([]);
 
-  const currentBranch = BRANCHES.find((b) => b.id === branch);
+  const isOwner = user?.role === "owner";
+
+  useEffect(() => {
+    async function loadBranches() {
+      const supabase = createClient();
+      const { data } = await supabase.from("branches").select("id, name").eq("is_active", true);
+      if (data) {
+        if (isOwner) {
+          setBranches([
+            { id: "all", label: "Semua Cabang" },
+            ...data.map(b => ({ id: b.id, label: b.name }))
+          ]);
+        } else {
+          // If not owner, only show their assigned branch
+          const userBranch = data.find(b => b.id === user?.branch_id);
+          if (userBranch) {
+            setBranches([{ id: userBranch.id, label: userBranch.name }]);
+            setBranch(userBranch.id);
+          } else {
+            setBranches([]);
+          }
+        }
+      }
+    }
+    loadBranches();
+  }, [isOwner, user?.branch_id]);
+
+  const currentBranch = branches.find((b) => b.id === branch) || (branches.length > 0 ? branches[0] : { id: "all", label: "Semua Cabang" });
 
   return (
     <header
@@ -40,19 +62,19 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
       {/* Branch Selector */}
       <div className="relative">
         <button
-          onClick={() => setShowBranches(!showBranches)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] transition-colors text-sm"
+          onClick={() => isOwner && setShowBranches(!showBranches)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] transition-colors text-sm ${isOwner ? "hover:bg-white/[0.08]" : "cursor-default"}`}
         >
           <span className="material-symbols-outlined text-[18px] text-indigo-400">store</span>
           <span className="text-white/80">{currentBranch?.label}</span>
-          <span className="material-symbols-outlined text-[16px] text-white/40">expand_more</span>
+          {isOwner && <span className="material-symbols-outlined text-[16px] text-white/40">expand_more</span>}
         </button>
 
         {showBranches && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setShowBranches(false)} />
             <div className="absolute right-0 top-full mt-2 w-56 bg-[#1E293B] border border-white/10 rounded-xl shadow-xl shadow-black/30 z-20 py-1 animate-scale-in">
-              {BRANCHES.map((b) => (
+              {branches.map((b) => (
                 <button
                   key={b.id}
                   onClick={() => { setBranch(b.id); setShowBranches(false); }}
