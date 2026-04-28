@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { getPosProducts, processTransaction } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
+import Scanner from "@/components/Scanner";
 
 const PAYMENT_METHODS = [
   { id: "cash", label: "Cash", icon: "payments" },
@@ -23,6 +24,7 @@ export default function RetailPOSPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -142,10 +144,24 @@ export default function RetailPOSPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <button className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-indigo-400 transition-colors">
+          <button 
+            onClick={() => setShowScanner(true)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-indigo-400 transition-colors"
+          >
             <span className="material-symbols-outlined text-[20px]">barcode_scanner</span>
           </button>
         </div>
+
+        {showScanner && (
+          <Scanner 
+            onScan={(val) => {
+              setSearch(val);
+              setShowScanner(false);
+              // Auto-add logic could go here if we find the product
+            }}
+            onClose={() => setShowScanner(false)}
+          />
+        )}
 
         {/* Product Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger-children">
