@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { INVENTORY_PRODUCTS, BRANCHES, formatRupiah } from "@/data/mockData";
+import { useState, useMemo, useEffect } from "react";
+import { formatRupiah } from "@/data/mockData";
+import { getInventory, addProduct, updateProduct, deleteProduct } from "@/app/actions/inventory";
+import { getCurrentUser } from "@/app/actions/auth";
 
 const CATEGORIES = ["Semua", "HP", "Aksesori", "Sparepart"];
 const ADD_CATEGORIES = ["HP", "Aksesori", "Sparepart"];
@@ -15,8 +17,46 @@ export default function InventoryPage() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
 
+  const [dbProducts, setDbProducts] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load data
+  useEffect(() => {
+    async function loadData() {
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      const data = await getInventory();
+      // Calculate derived stock A, B, C for UI matching
+      const mapped = data.map(p => {
+        let stockA = 0, stockB = 0, stockC = 0;
+        // Assume branches: ruteng (A), larantuka (B), riung (C) or generic order
+        p.stock.forEach(s => {
+          if (s.branches?.name?.toLowerCase().includes("ruteng")) stockA = s.quantity;
+          else if (s.branches?.name?.toLowerCase().includes("larantuka")) stockB = s.quantity;
+          else stockC = s.quantity;
+        });
+        return {
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          category: p.category,
+          buyPrice: p.purchase_price,
+          sellPrice: p.retail_price,
+          stockA, stockB, stockC,
+          originalStock: p.stock
+        };
+      });
+      setDbProducts(mapped);
+      setIsLoading(false);
+    }
+    loadData();
+  }, []);
+
+  const hasAccess = currentUser?.role === "owner" || currentUser?.role === "manager";
+
   const filtered = useMemo(() => {
-    let items = [...INVENTORY_PRODUCTS];
+    let items = [...dbProducts];
 
     if (category !== "Semua") {
       items = items.filter((p) => p.category === category);
@@ -36,16 +76,26 @@ export default function InventoryPage() {
     if (sortBy === "stock-high") items.sort((a, b) => (b.stockA + b.stockB + b.stockC) - (a.stockA + a.stockB + a.stockC));
 
     return items;
-  }, [search, category, sortBy]);
+  }, [search, category, sortBy, dbProducts]);
 
-  const totalItems = INVENTORY_PRODUCTS.reduce((sum, p) => sum + p.stockA + p.stockB + p.stockC, 0);
-  const lowStockItems = INVENTORY_PRODUCTS.filter((p) => (p.stockA + p.stockB + p.stockC) < 5);
+  const totalItems = dbProducts.reduce((sum, p) => sum + p.stockA + p.stockB + p.stockC, 0);
+  const lowStockItems = dbProducts.filter((p) => (p.stockA + p.stockB + p.stockC) < 5);
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (!addForm.name || !addForm.sku) return alert("Nama dan SKU wajib diisi!");
-    alert(`Produk "${addForm.name}" (${addForm.sku}) berhasil ditambahkan!\n\nKategori: ${addForm.category}\nHarga Beli: ${formatRupiah(Number(addForm.buyPrice) || 0)}\nHarga Jual: ${formatRupiah(Number(addForm.sellPrice) || 0)}\nStok: A=${addForm.stockA} B=${addForm.stockB} C=${addForm.stockC}\n\n(Data akan tersimpan ke Supabase setelah integrasi backend)`);
-    setShowAddForm(false);
-    setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0" });
+    try {
+      await addProduct({
+        name: addForm.name, sku: addForm.sku, category: addForm.category,
+        retailPrice: Number(addForm.sellPrice), purchasePrice: Number(addForm.buyPrice),
+        isService: false, isDigital: false
+      });
+      alert(`Produk berhasil ditambahkan!`);
+      setShowAddForm(false);
+      setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0" });
+      const data = await getInventory(); // reload
+      // quick mapping reload...
+      window.location.reload(); 
+    } catch (err) { alert(err.message); }
   };
 
   const startEdit = (product) => {
@@ -54,11 +104,27 @@ export default function InventoryPage() {
     setShowAddForm(false);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editForm.name || !editForm.sku) return alert("Nama dan SKU wajib diisi!");
-    alert(`Produk "${editForm.name}" berhasil diupdate!\n\n(Perubahan akan tersimpan ke Supabase setelah integrasi backend)`);
-    setEditingId(null);
-    setEditForm(null);
+    try {
+      await updateProduct(editingId, {
+        name: editForm.name, sku: editForm.sku, category: editForm.category,
+        retailPrice: Number(editForm.sellPrice), purchasePrice: Number(editForm.buyPrice)
+      });
+      alert(`Produk berhasil diupdate!`);
+      setEditingId(null);
+      setEditForm(null);
+      window.location.reload();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm("Yakin ingin menghapus produk ini?")) {
+      try {
+        await deleteProduct(id);
+        setDbProducts(dbProducts.filter(p => p.id !== id));
+      } catch (err) { alert(err.message); }
+    }
   };
 
   const cancelEdit = () => { setEditingId(null); setEditForm(null); };
@@ -69,12 +135,14 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-white">Inventaris</h1>
-          <p className="text-sm text-white/40 mt-0.5">Stok semua cabang — {INVENTORY_PRODUCTS.length} produk</p>
+          <p className="text-sm text-white/40 mt-0.5">Stok semua cabang — {dbProducts.length} produk</p>
         </div>
-        <button onClick={() => setShowAddForm(!showAddForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
-          <span className="material-symbols-outlined text-[18px]">{showAddForm ? "close" : "add"}</span>
-          <span className="hidden sm:inline">{showAddForm ? "Batal" : "Tambah Produk"}</span>
-        </button>
+        {hasAccess && (
+          <button onClick={() => setShowAddForm(!showAddForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">{showAddForm ? "close" : "add"}</span>
+            <span className="hidden sm:inline">{showAddForm ? "Batal" : "Tambah Produk"}</span>
+          </button>
+        )}
       </div>
 
       {/* Add Product Form */}
@@ -187,13 +255,13 @@ export default function InventoryPage() {
         <div className="kpi-card emerald hidden lg:block" style={{ padding: 16 }}>
           <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Kategori HP</p>
           <p className="text-2xl font-bold text-white tabular-nums">
-            {INVENTORY_PRODUCTS.filter((p) => p.category === "HP").length}
+            {dbProducts.filter((p) => p.category === "HP").length}
           </p>
         </div>
         <div className="kpi-card blue hidden lg:block" style={{ padding: 16 }}>
           <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Aksesori & Part</p>
           <p className="text-2xl font-bold text-white tabular-nums">
-            {INVENTORY_PRODUCTS.filter((p) => p.category !== "HP").length}
+            {dbProducts.filter((p) => p.category !== "HP").length}
           </p>
         </div>
       </div>
@@ -254,14 +322,19 @@ export default function InventoryPage() {
                       )}
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <div className="flex items-center justify-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-indigo-400" title="Transfer Stok">
-                          <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-                        </button>
-                        <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-white" title="Edit">
-                          <span className="material-symbols-outlined text-[18px]">edit</span>
-                        </button>
-                      </div>
+                      {hasAccess && (
+                        <div className="flex items-center justify-center gap-1">
+                          <button className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-indigo-400" title="Transfer Stok">
+                            <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                          </button>
+                          <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-white" title="Edit">
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                          </button>
+                          <button onClick={() => handleDelete(product.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-white/40 hover:text-red-400" title="Hapus">
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -325,7 +398,7 @@ export default function InventoryPage() {
         {/* Footer */}
         <div className="px-4 py-3 border-t border-white/[0.04] flex justify-between items-center">
           <p className="text-[11px] text-white/30">
-            Menampilkan {filtered.length} dari {INVENTORY_PRODUCTS.length} produk
+            Menampilkan {filtered.length} dari {dbProducts.length} produk
           </p>
         </div>
       </div>

@@ -67,10 +67,10 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center text-2xl font-black text-white" style={{ background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }}>
-            L
+            JT
           </div>
-          <h1 className="text-2xl font-bold text-white">Lumina ERP</h1>
-          <p className="text-sm text-white/40 mt-1">Smart POS & Service Management</p>
+          <h1 className="text-2xl font-bold text-white">JT CELL GROUP</h1>
+          <p className="text-sm text-white/40 mt-1">Smart System untuk Penjualan & Servis</p>
         </div>
 
         {/* Card */}
@@ -138,7 +138,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-[11px] text-white/20 mt-6">© 2026 Lumina ERP. All rights reserved.</p>
+        <p className="text-center text-[11px] text-white/20 mt-6">© 2026 JT CELL GROUP. All rights reserved.</p>
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { INVENTORY_PRODUCTS, formatRupiah } from "@/data/mockData";
+import { useState, useMemo, useEffect } from "react";
+import { formatRupiah } from "@/data/mockData";
+import { getPosProducts, processTransaction } from "@/app/actions/pos";
+import { getCurrentUser } from "@/app/actions/auth";
 
 const PAYMENT_METHODS = [
   { id: "cash", label: "Cash", icon: "payments" },
@@ -17,9 +19,25 @@ export default function RetailPOSPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [customerName, setCustomerName] = useState("");
 
+  const [dbProducts, setDbProducts] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    async function loadData() {
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      const data = await getPosProducts(user?.branch_id || "all");
+      setDbProducts(data);
+      setIsLoading(false);
+    }
+    loadData();
+  }, []);
+
   // Only sellable products (with sellPrice > 0)
   const products = useMemo(() => {
-    let items = INVENTORY_PRODUCTS.filter((p) => p.sellPrice > 0);
+    let items = dbProducts.filter((p) => p.sellPrice > 0 && !p.is_service);
     if (search) {
       const q = search.toLowerCase();
       items = items.filter(
@@ -59,8 +77,28 @@ export default function RetailPOSPage() {
   const discountAmount = discountPercent ? Math.round(subtotal * (parseFloat(discountPercent) / 100)) : 0;
   const total = subtotal - discountAmount;
 
-  const handleCheckout = () => {
-    setShowReceipt(true);
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    setIsProcessing(true);
+    try {
+      await processTransaction(
+        cart,
+        discountAmount,
+        paymentMethod,
+        customerName,
+        currentUser?.branch_id || "all",
+        currentUser?.id
+      );
+      setShowReceipt(true);
+      
+      // Reload products to get fresh stock
+      const freshData = await getPosProducts(currentUser?.branch_id || "all");
+      setDbProducts(freshData);
+    } catch (err) {
+      alert("Gagal memproses transaksi: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleNewTransaction = () => {
@@ -111,16 +149,27 @@ export default function RetailPOSPage() {
 
         {/* Product Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger-children">
-          {products.map((product) => {
-            const totalStock = product.stockA + product.stockB + product.stockC;
+          {isLoading ? (
+            <div className="col-span-full py-10 text-center text-white/50 animate-pulse">
+              Memuat data produk...
+            </div>
+          ) : products.length === 0 ? (
+            <div className="col-span-full py-10 text-center text-white/50">
+              Tidak ada produk ditemukan.
+            </div>
+          ) : products.map((product) => {
+            const totalStock = product.totalStock;
             const inCart = cart.find((c) => c.id === product.id);
+            const isDigital = product.is_digital;
+            const isOutOfStock = !isDigital && totalStock === 0;
+
             return (
               <button
                 key={product.id}
                 onClick={() => addToCart(product)}
                 className="glass-card p-3 text-left transition-all duration-200 hover:border-indigo-500/30 active:scale-[0.97] group"
-                style={{ cursor: totalStock === 0 ? "not-allowed" : "pointer", opacity: totalStock === 0 ? 0.4 : 1 }}
-                disabled={totalStock === 0}
+                style={{ cursor: isOutOfStock ? "not-allowed" : "pointer", opacity: isOutOfStock ? 0.4 : 1 }}
+                disabled={isOutOfStock}
               >
                 {/* Product icon */}
                 <div
@@ -139,9 +188,11 @@ export default function RetailPOSPage() {
 
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-sm font-bold text-white tabular-nums">{formatRupiah(product.sellPrice)}</span>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${totalStock < 5 ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>
-                    {totalStock}
-                  </span>
+                  {!isDigital && (
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${totalStock < 5 ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                      {totalStock}
+                    </span>
+                  )}
                 </div>
 
                 {inCart && (
@@ -270,10 +321,11 @@ export default function RetailPOSPage() {
               {/* Checkout Button */}
               <button
                 onClick={handleCheckout}
-                className="btn-gradient w-full py-3.5 flex items-center justify-center gap-2 text-sm"
+                disabled={isProcessing}
+                className={`w-full py-3.5 flex items-center justify-center gap-2 text-sm ${isProcessing ? 'bg-white/10 text-white/50 cursor-not-allowed' : 'btn-gradient'}`}
               >
                 <span className="material-symbols-outlined text-[20px]">point_of_sale</span>
-                Proses Pembayaran
+                {isProcessing ? "Memproses..." : "Proses Pembayaran"}
               </button>
             </>
           )}
