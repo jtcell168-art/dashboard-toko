@@ -23,11 +23,12 @@ export async function getPosProducts(branchId = "all") {
   // Format products so it's easy to use in POS
   return products.map(product => {
     // Hitung total stok (atau stok cabang jika branchId bukan 'all')
+    const stockArr = product.stock || [];
     const relevantStock = branchId === "all" 
-      ? product.stock 
-      : product.stock.filter(s => s.branch_id === branchId);
+      ? stockArr 
+      : stockArr.filter(s => s.branch_id === branchId);
       
-    const totalQty = relevantStock.reduce((sum, s) => sum + s.quantity, 0);
+    const totalQty = relevantStock.reduce((sum, s) => sum + (s.quantity || 0), 0);
 
     return {
       id: product.id,
@@ -55,12 +56,12 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
   const { data: transaction, error: trxError } = await supabase
     .from("transactions")
     .insert({
-      branch_id: branchId,
-      user_id: userId,
+      branch_id: branchId === "all" ? null : branchId,
+      cashier_id: userId,
       type: "retail",
       invoice_no: invoiceNo,
       subtotal: subtotal,
-      discount: discountAmount,
+      discount_amount: discountAmount,
       total: total,
       payment_method: paymentMethod,
       customer_name: customerName,
@@ -76,13 +77,14 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
     await supabase.from("transaction_items").insert({
       transaction_id: transaction.id,
       product_id: item.id,
+      product_name: item.name,
       quantity: item.qty,
       unit_price: item.sellPrice,
       subtotal: item.sellPrice * item.qty
     });
 
-    // Kurangi stok di branch bersangkutan (jika bukan jasa/digital)
-    if (!item.is_service && !item.is_digital) {
+    // Kurangi stok di branch bersangkutan (jika bukan jasa/digital dan ada branchId)
+    if (!item.is_service && !item.is_digital && branchId !== "all") {
       // Cari baris stok
       const { data: stockRow } = await supabase
         .from("stock")
@@ -94,7 +96,7 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
       if (stockRow) {
         await supabase
           .from("stock")
-          .update({ quantity: stockRow.quantity - item.qty })
+          .update({ quantity: Math.max(0, stockRow.quantity - item.qty) })
           .eq("id", stockRow.id);
       }
     }

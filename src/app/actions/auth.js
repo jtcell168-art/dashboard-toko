@@ -9,15 +9,25 @@ export async function logout() {
 }
 
 export async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*, branches(name)")
-    .eq("id", user.id)
-    .single();
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*, branches(name)")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  return profile;
+    if (profileError) {
+      console.error("Error fetching profile:", profileError);
+      return null;
+    }
+
+    return profile;
+  } catch (err) {
+    console.error("Critical error in getCurrentUser:", err);
+    return null;
+  }
 }
