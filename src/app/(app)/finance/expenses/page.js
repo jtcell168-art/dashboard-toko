@@ -4,6 +4,7 @@ import { formatRupiah } from "@/data/mockData";
 import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/app/actions/finance";
 import { getBranches } from "@/app/actions/branches";
 import { getCurrentUser } from "@/app/actions/auth";
+import { exportToCSV } from "@/lib/utils/export";
 
 const CATEGORIES = ["Sewa Toko", "Listrik", "Internet", "Gaji", "Transportasi", "Maintenance", "Lainnya"];
 
@@ -15,6 +16,14 @@ export default function ExpensesPage() {
   const [branches, setBranches] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1); // Default to start of month
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
 
   // Edit State
   const [editingId, setEditingId] = useState(null);
@@ -22,11 +31,12 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     async function load() {
+      setIsLoading(true);
       const u = await getCurrentUser();
       setCurrentUser(u);
       
       const [expData, branchData] = await Promise.all([
-        getExpenses(),
+        getExpenses(startDate, endDate),
         getBranches()
       ]);
       setExpenses(expData);
@@ -40,7 +50,7 @@ export default function ExpensesPage() {
       setIsLoading(false);
     }
     load();
-  }, []);
+  }, [startDate, endDate]);
 
   const hasAccess = currentUser?.role === "owner" || currentUser?.role === "manager";
   const total = expenses.reduce((s, e) => s + e.amount, 0);
@@ -97,10 +107,51 @@ export default function ExpensesPage() {
           <h1 className="text-xl md:text-2xl font-bold text-white">Biaya Operasional</h1>
           <p className="text-sm text-white/40 mt-0.5">Kelola pengeluaran operasional toko</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
-          <span className="material-symbols-outlined text-[18px]">{showForm ? "close" : "add"}</span>
-          {showForm ? "Batal" : "Tambah Biaya"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              const dataToExport = expenses.map(e => ({
+                Tanggal: new Date(e.date).toLocaleDateString("id-ID"),
+                Kategori: e.category,
+                Jumlah: e.amount,
+                Cabang: e.branches?.name,
+                Catatan: e.note || "-"
+              }));
+              exportToCSV(dataToExport, "Laporan_Biaya_Operasional");
+            }}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            <span className="hidden sm:inline">Export Excel</span>
+          </button>
+          <button onClick={() => setShowForm(!showForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">{showForm ? "close" : "add"}</span>
+            {showForm ? "Batal" : "Tambah Biaya"}
+          </button>
+        </div>
+      </div>
+
+      {/* Date Filter */}
+      <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10 w-fit">
+        <div className="flex flex-col px-2 py-1">
+          <label className="text-[9px] uppercase font-bold text-white/30">Dari</label>
+          <input 
+            type="date" 
+            className="bg-transparent text-xs text-white focus:outline-none"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </div>
+        <div className="w-px h-6 bg-white/10" />
+        <div className="flex flex-col px-2 py-1">
+          <label className="text-[9px] uppercase font-bold text-white/30">Sampai</label>
+          <input 
+            type="date" 
+            className="bg-transparent text-xs text-white focus:outline-none"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="kpi-card rose" style={{ padding: 16 }}>

@@ -2,33 +2,95 @@
 import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { createClient } from "@/lib/supabase/client";
+import { exportToCSV } from "@/lib/utils/export";
 
 export default function DiscountHistoryPage() {
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1); // Default to start of month
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
 
   useEffect(() => {
     async function load() {
+      setIsLoading(true);
       const supabase = createClient();
       // Transaksi yang punya diskon
-      const { data: trx } = await supabase
+      let query = supabase
         .from("transactions")
         .select("*, profiles(full_name)")
         .gt("discount_amount", 0)
         .order("created_at", { ascending: false });
         
+      if (startDate) query = query.gte("created_at", startDate);
+      if (endDate) query = query.lte("created_at", endDate + "T23:59:59");
+
+      const { data: trx } = await query;
+        
       setData(trx || []);
       setIsLoading(false);
     }
     load();
-  }, []);
+  }, [startDate, endDate]);
 
   const totalDiscount = data.reduce((sum, d) => sum + Number(d.discount_amount || 0), 0);
   const avgDiscount = data.length > 0 ? data.reduce((sum, d) => sum + Number(d.discount_percent || 0), 0) / data.length : 0;
 
   return (
     <div className="flex flex-col gap-5">
-      <div><h1 className="text-xl md:text-2xl font-bold text-white">Riwayat Diskon</h1><p className="text-sm text-white/40 mt-0.5">Semua diskon yang pernah diberikan</p></div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div><h1 className="text-xl md:text-2xl font-bold text-white">Riwayat Diskon</h1><p className="text-sm text-white/40 mt-0.5">Semua diskon yang pernah diberikan</p></div>
+        
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              const dataToExport = data.map(d => ({
+                Tanggal: new Date(d.created_at).toLocaleDateString("id-ID"),
+                "No. Invoice": d.invoice_no,
+                Customer: d.customer_name || "-",
+                "Subtotal (Sebelum Diskon)": d.subtotal,
+                "Diskon (%)": d.discount_percent,
+                "Potongan (Rp)": d.discount_amount,
+                "Total (Sesudah Diskon)": d.total,
+                Kasir: d.profiles?.full_name
+              }));
+              exportToCSV(dataToExport, "Laporan_Diskon");
+            }}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            <span className="hidden sm:inline">Export Excel</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Date Filter */}
+      <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10 w-fit">
+        <div className="flex flex-col px-2 py-1">
+          <label className="text-[9px] uppercase font-bold text-white/30">Dari</label>
+          <input 
+            type="date" 
+            className="bg-transparent text-xs text-white focus:outline-none"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </div>
+        <div className="w-px h-6 bg-white/10" />
+        <div className="flex flex-col px-2 py-1">
+          <label className="text-[9px] uppercase font-bold text-white/30">Sampai</label>
+          <input 
+            type="date" 
+            className="bg-transparent text-xs text-white focus:outline-none"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="kpi-card indigo" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Diskon</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(totalDiscount)}</p></div>

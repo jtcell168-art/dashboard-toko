@@ -3,13 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "./auth";
 
 // GET EXPENSES
-export async function getExpenses() {
+export async function getExpenses(startDate, endDate) {
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) return [];
 
   let query = supabase.from("expenses").select("*, branches (name)").order("date", { ascending: false });
   
+  if (startDate) query = query.gte("date", startDate);
+  if (endDate) query = query.lte("date", endDate + "T23:59:59");
+
   // Jika manager cabang, hanya ambil data cabangnya
   if (user.role === "manager" && user.branch_id) {
     query = query.eq("branch_id", user.branch_id);

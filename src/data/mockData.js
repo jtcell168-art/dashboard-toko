@@ -1,17 +1,17 @@
 // ========== CORE ==========
 export const BRANCHES = [
-  { id: "a", name: "Cabang A — Pusat", city: "Jakarta", address: "Jl. Raya Utama No. 123", phone: "021-1234567" },
-  { id: "b", name: "Cabang B — Mall", city: "Jakarta", address: "Mall Central Lt. 2 No. 15", phone: "021-7654321" },
-  { id: "c", name: "Cabang C — Ruko", city: "Bandung", address: "Ruko Jl. Asia Afrika No. 45", phone: "022-9876543" },
+  { id: "a", name: "JT CELL Ruteng - Pusat", city: "Ruteng", address: "Jl. Raya Ruteng No. 123", phone: "0812-3456-7890" },
+  { id: "b", name: "JT CELL Larantuka", city: "Larantuka", address: "Jl. Larantuka Utama No. 45", phone: "0812-9876-5432" },
+  { id: "c", name: "JT CELL Riung", city: "Riung", address: "Jl. Riung Indah No. 88", phone: "0813-1111-2222" },
 ];
 
 export const USERS = [
   { id: 1, name: "Andi Wijaya", role: "owner", email: "andi@lumina.id", branch: "Semua", status: "active", lastLogin: "2026-04-28 08:30" },
-  { id: 2, name: "Budi Santoso", role: "manager", email: "budi@lumina.id", branch: "Cabang A", status: "active", lastLogin: "2026-04-28 07:45" },
-  { id: 3, name: "Citra Dewi", role: "kasir", email: "citra@lumina.id", branch: "Cabang A", status: "active", lastLogin: "2026-04-28 08:00" },
-  { id: 4, name: "Doni Prasetyo", role: "teknisi", email: "doni@lumina.id", branch: "Cabang B", status: "active", lastLogin: "2026-04-27 17:00" },
-  { id: 5, name: "Eka Putri", role: "kasir", email: "eka@lumina.id", branch: "Cabang B", status: "active", lastLogin: "2026-04-28 08:10" },
-  { id: 6, name: "Fajar Nugroho", role: "teknisi", email: "fajar@lumina.id", branch: "Cabang C", status: "inactive", lastLogin: "2026-04-20 15:00" },
+  { id: 2, name: "Budi Santoso", role: "manager", email: "budi@lumina.id", branch: "JT CELL Ruteng - Pusat", status: "active", lastLogin: "2026-04-28 07:45" },
+  { id: 3, name: "Citra Dewi", role: "kasir", email: "citra@lumina.id", branch: "JT CELL Ruteng - Pusat", status: "active", lastLogin: "2026-04-28 08:00" },
+  { id: 4, name: "Doni Prasetyo", role: "teknisi", email: "doni@lumina.id", branch: "JT CELL Larantuka", status: "active", lastLogin: "2026-04-27 17:00" },
+  { id: 5, name: "Eka Putri", role: "kasir", email: "eka@lumina.id", branch: "JT CELL Larantuka", status: "active", lastLogin: "2026-04-28 08:10" },
+  { id: 6, name: "Fajar Nugroho", role: "teknisi", email: "fajar@lumina.id", branch: "JT CELL Riung", status: "inactive", lastLogin: "2026-04-20 15:00" },
 ];
 
 export const formatRupiah = (num) => "Rp " + new Intl.NumberFormat("id-ID").format(num);
@@ -36,9 +36,9 @@ export const SALES_7DAYS = [
   { day: "Min", cabA: 5400000, cabB: 4600000, cabC: 3600000 },
 ];
 export const REVENUE_BY_BRANCH = [
-  { branch: "Cabang A", revenue: 37_100_000, color: "#6366F1" },
-  { branch: "Cabang B", revenue: 27_300_000, color: "#8B5CF6" },
-  { branch: "Cabang C", revenue: 22_300_000, color: "#A78BFA" },
+  { branch: "JT CELL Ruteng - Pusat", revenue: 37_100_000, color: "#6366F1" },
+  { branch: "JT CELL Larantuka", revenue: 27_300_000, color: "#8B5CF6" },
+  { branch: "JT CELL Riung", revenue: 22_300_000, color: "#A78BFA" },
 ];
 export const RECENT_TRANSACTIONS = [
   { id: "TRX-001", type: "retail", customer: "Ahmad Rizki", amount: 4_500_000, branch: "A", time: "14:32", product: "iPhone 13 128GB" },
@@ -74,18 +74,18 @@ export const INVENTORY_PRODUCTS = [
 ];
 
 export const TRANSFER_HISTORY = [
-  { id: "TRF-001", product: "iPhone 15 128GB", from: "Cabang A", to: "Cabang C", qty: 2, date: "2026-04-26", status: "completed", by: "Budi" },
-  { id: "TRF-002", product: "Samsung Galaxy A15", from: "Cabang C", to: "Cabang B", qty: 5, date: "2026-04-25", status: "completed", by: "Citra" },
-  { id: "TRF-003", product: "Charger 65W USB-C", from: "Cabang A", to: "Cabang B", qty: 3, date: "2026-04-27", status: "in_transit", by: "Budi" },
-  { id: "TRF-004", product: "Tempered Glass Universal", from: "Cabang B", to: "Cabang C", qty: 10, date: "2026-04-27", status: "in_transit", by: "Eka" },
+  { id: "TRF-001", product: "iPhone 15 128GB", from: "JT CELL Ruteng - Pusat", to: "JT CELL Riung", qty: 2, date: "2026-04-26", status: "completed", by: "Budi" },
+  { id: "TRF-002", product: "Samsung Galaxy A15", from: "JT CELL Riung", to: "JT CELL Larantuka", qty: 5, date: "2026-04-25", status: "completed", by: "Citra" },
+  { id: "TRF-003", product: "Charger 65W USB-C", from: "JT CELL Ruteng - Pusat", to: "JT CELL Larantuka", qty: 3, date: "2026-04-27", status: "in_transit", by: "Budi" },
+  { id: "TRF-004", product: "Tempered Glass Universal", from: "JT CELL Larantuka", to: "JT CELL Riung", qty: 10, date: "2026-04-27", status: "in_transit", by: "Eka" },
 ];
 
 export const IMEI_RECORDS = [
-  { imei: "352456789012345", product: "iPhone 14 Pro", status: "service", branch: "Cabang B", customer: "Pak Joko", lastAction: "Masuk servis — LCD Retak", date: "2026-04-24" },
-  { imei: "356789012345678", product: "Samsung S23", status: "service", branch: "Cabang A", customer: "Bu Ratna", lastAction: "Masuk servis — Baterai Kembung", date: "2026-04-25" },
-  { imei: "359012345678901", product: "iPhone 15 128GB", status: "sold", branch: "Cabang A", customer: "Ahmad Rizki", lastAction: "Terjual — Retail", date: "2026-04-27" },
-  { imei: "351234567890124", product: "Samsung Galaxy S24", status: "stock", branch: "Cabang B", customer: null, lastAction: "Masuk stok dari PO-003", date: "2026-04-20" },
-  { imei: "354567890123456", product: "Xiaomi Redmi Note 13", status: "stock", branch: "Cabang C", customer: null, lastAction: "Transfer dari Cabang A", date: "2026-04-22" },
+  { imei: "352456789012345", product: "iPhone 14 Pro", status: "service", branch: "JT CELL Larantuka", customer: "Pak Joko", lastAction: "Masuk servis — LCD Retak", date: "2026-04-24" },
+  { imei: "356789012345678", product: "Samsung S23", status: "service", branch: "JT CELL Ruteng - Pusat", customer: "Bu Ratna", lastAction: "Masuk servis — Baterai Kembung", date: "2026-04-25" },
+  { imei: "359012345678901", product: "iPhone 15 128GB", status: "sold", branch: "JT CELL Ruteng - Pusat", customer: "Ahmad Rizki", lastAction: "Terjual — Retail", date: "2026-04-27" },
+  { imei: "351234567890124", product: "Samsung Galaxy S24", status: "stock", branch: "JT CELL Larantuka", customer: null, lastAction: "Masuk stok dari PO-003", date: "2026-04-20" },
+  { imei: "354567890123456", product: "Xiaomi Redmi Note 13", status: "stock", branch: "JT CELL Riung", customer: null, lastAction: "Transfer dari JT CELL Ruteng - Pusat", date: "2026-04-22" },
 ];
 
 // ========== SERVICE ==========
@@ -137,20 +137,20 @@ export const SUPPLIERS = [
   { id: 4, name: "Toko Aksesori Jaya", contact: "Ko Alung", phone: "081234567890", email: "aksesorijaya@gmail.com", category: "Aksesori & Part", balance: -2_500_000 },
 ];
 export const PURCHASE_ORDERS = [
-  { id: "PO-001", supplier: "PT Trikomsel (TAM)", items: 3, totalAmount: 52_500_000, status: "received", createdAt: "2026-04-15", receivedAt: "2026-04-18", branch: "Cabang A" },
-  { id: "PO-002", supplier: "Samsung Electronics ID", items: 5, totalAmount: 38_000_000, status: "partial", createdAt: "2026-04-20", receivedAt: null, branch: "Cabang B" },
-  { id: "PO-003", supplier: "Toko Aksesori Jaya", items: 8, totalAmount: 4_500_000, status: "sent", createdAt: "2026-04-25", receivedAt: null, branch: "Cabang A" },
-  { id: "PO-004", supplier: "Xiaomi Indonesia", items: 4, totalAmount: 22_000_000, status: "draft", createdAt: "2026-04-27", receivedAt: null, branch: "Cabang C" },
+  { id: "PO-001", supplier: "PT Trikomsel (TAM)", items: 3, totalAmount: 52_500_000, status: "received", createdAt: "2026-04-15", receivedAt: "2026-04-18", branch: "JT CELL Ruteng - Pusat" },
+  { id: "PO-002", supplier: "Samsung Electronics ID", items: 5, totalAmount: 38_000_000, status: "partial", createdAt: "2026-04-20", receivedAt: null, branch: "JT CELL Larantuka" },
+  { id: "PO-003", supplier: "Toko Aksesori Jaya", items: 8, totalAmount: 4_500_000, status: "sent", createdAt: "2026-04-25", receivedAt: null, branch: "JT CELL Ruteng - Pusat" },
+  { id: "PO-004", supplier: "Xiaomi Indonesia", items: 4, totalAmount: 22_000_000, status: "draft", createdAt: "2026-04-27", receivedAt: null, branch: "JT CELL Riung" },
 ];
 
 // ========== FINANCE ==========
 export const EXPENSES = [
-  { id: 1, category: "Sewa Toko", amount: 8_000_000, branch: "Cabang A", date: "2026-04-01", note: "Sewa bulan April", recurring: true },
-  { id: 2, category: "Listrik", amount: 1_200_000, branch: "Cabang A", date: "2026-04-05", note: "Tagihan PLN", recurring: true },
+  { id: 1, category: "Sewa Toko", amount: 8_000_000, branch: "JT CELL Ruteng - Pusat", date: "2026-04-01", note: "Sewa bulan April", recurring: true },
+  { id: 2, category: "Listrik", amount: 1_200_000, branch: "JT CELL Ruteng - Pusat", date: "2026-04-05", note: "Tagihan PLN", recurring: true },
   { id: 3, category: "Gaji", amount: 15_000_000, branch: "Semua", date: "2026-04-01", note: "Gaji 6 karyawan", recurring: true },
-  { id: 4, category: "Internet", amount: 500_000, branch: "Cabang B", date: "2026-04-03", note: "IndiHome", recurring: true },
-  { id: 5, category: "Maintenance", amount: 350_000, branch: "Cabang C", date: "2026-04-12", note: "Service AC", recurring: false },
-  { id: 6, category: "Transportasi", amount: 200_000, branch: "Cabang A", date: "2026-04-15", note: "Antar barang ke Cab C", recurring: false },
+  { id: 4, category: "Internet", amount: 500_000, branch: "JT CELL Larantuka", date: "2026-04-03", note: "IndiHome", recurring: true },
+  { id: 5, category: "Maintenance", amount: 350_000, branch: "JT CELL Riung", date: "2026-04-12", note: "Service AC", recurring: false },
+  { id: 6, category: "Transportasi", amount: 200_000, branch: "JT CELL Ruteng - Pusat", date: "2026-04-15", note: "Antar barang ke JT CELL Riung", recurring: false },
 ];
 export const PAYABLES = [
   { id: 1, supplier: "Samsung Electronics ID", amount: 15_000_000, dueDate: "2026-05-05", status: "unpaid", poRef: "PO-002" },

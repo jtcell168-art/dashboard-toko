@@ -17,9 +17,9 @@ CREATE TABLE branches (
 );
 
 INSERT INTO branches (name, city, address, phone) VALUES
-  ('Cabang A — Pusat', 'Jakarta', 'Jl. Raya Utama No. 123', '021-1234567'),
-  ('Cabang B — Mall', 'Jakarta', 'Mall Central Lt. 2 No. 15', '021-7654321'),
-  ('Cabang C — Ruko', 'Bandung', 'Ruko Jl. Asia Afrika No. 45', '022-9876543');
+  ('JT CELL Ruteng - Pusat', 'Ruteng', 'Jl. Raya Ruteng No. 123', '0812-3456-7890'),
+  ('JT CELL Larantuka', 'Larantuka', 'Jl. Larantuka Utama No. 45', '0812-9876-5432'),
+  ('JT CELL Riung', 'Riung', 'Jl. Riung Indah No. 88', '0813-1111-2222');
 
 -- ============================================
 -- 2. PROFILES (Users + Role)
@@ -75,11 +75,26 @@ CREATE TABLE products (
   name TEXT NOT NULL,
   sku TEXT UNIQUE NOT NULL,
   category_id UUID REFERENCES categories(id),
-  buy_price BIGINT NOT NULL DEFAULT 0,
-  sell_price BIGINT NOT NULL DEFAULT 0,
+  purchase_price BIGINT NOT NULL DEFAULT 0,
+  retail_price BIGINT NOT NULL DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================
+-- 4.1 PRICE HISTORY (Historis Harga)
+-- ============================================
+CREATE TABLE price_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id),
+  old_buy_price BIGINT,
+  new_buy_price BIGINT,
+  old_sell_price BIGINT,
+  new_sell_price BIGINT,
+  reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ============================================
@@ -344,11 +359,13 @@ ALTER TABLE kasbon ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cicilan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discount_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE price_history ENABLE ROW LEVEL SECURITY;
 
 -- Read policies (authenticated users can read all)
 CREATE POLICY "read_all" ON branches FOR SELECT TO authenticated USING (true);
 CREATE POLICY "read_all" ON profiles FOR SELECT TO authenticated USING (true);
 CREATE POLICY "read_all" ON products FOR SELECT TO authenticated USING (true);
+CREATE POLICY "read_all" ON price_history FOR SELECT TO authenticated USING (true);
 CREATE POLICY "read_all" ON stock FOR SELECT TO authenticated USING (true);
 CREATE POLICY "read_all" ON categories FOR SELECT TO authenticated USING (true);
 CREATE POLICY "read_all" ON imei_records FOR SELECT TO authenticated USING (true);
@@ -399,6 +416,8 @@ CREATE POLICY "update_cicilan" ON cicilan FOR UPDATE TO authenticated USING (tru
 CREATE POLICY "insert_all" ON payables FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "update_payables" ON payables FOR UPDATE TO authenticated USING (true);
 CREATE POLICY "insert_all" ON purchase_order_items FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "insert_price_history" ON price_history FOR INSERT TO authenticated 
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner','manager')));
 
 -- Profile: users can update their own profile
 CREATE POLICY "update_own" ON profiles FOR UPDATE TO authenticated USING (id = auth.uid());

@@ -67,6 +67,7 @@ const MENU = [
     href: "/reports",
     children: [
       { label: "Laba Rugi", href: "/reports/pnl" },
+      { label: "Laporan Transaksi", href: "/reports/transactions" },
       { label: "Performa Produk", href: "/reports/products" },
       { label: "Produktivitas Servis", href: "/reports/service" },
       { label: "Laporan Kasbon", href: "/reports/kasbon" },
