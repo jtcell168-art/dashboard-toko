@@ -278,37 +278,43 @@ export default function Sidebar({ collapsed, onToggle, user }) {
 
       {/* Actions */}
       <div className="shrink-0 p-3 border-t border-white/[0.04] flex flex-col gap-1">
-        <button
-          onClick={() => logout()}
-          className="sidebar-item w-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
-          style={{ justifyContent: collapsed ? "center" : "flex-start" }}
-          title={collapsed ? "Logout" : "Logout"}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 22, flexShrink: 0 }}>
-            logout
-          </span>
-          {!collapsed && <span className="whitespace-nowrap">Logout</span>}
-        </button>
+        {mounted && (
+          <>
+            <button
+              onClick={() => logout()}
+              className="sidebar-item w-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+              style={{ justifyContent: collapsed ? "center" : "flex-start" }}
+              title={collapsed ? "Logout" : "Logout"}
+              suppressHydrationWarning
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 22, flexShrink: 0 }}>
+                logout
+              </span>
+              {!collapsed && <span className="whitespace-nowrap">Logout</span>}
+            </button>
 
-        <button
-          onClick={onToggle}
-          className="sidebar-item w-full"
-          style={{ justifyContent: collapsed ? "center" : "flex-start" }}
-          title={collapsed ? "Expand" : "Collapse"}
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{
-              fontSize: 22,
-              flexShrink: 0,
-              transition: "transform 0.3s",
-              transform: collapsed ? "rotate(0)" : "rotate(180deg)",
-            }}
-          >
-            chevron_right
-          </span>
-          {!collapsed && <span className="whitespace-nowrap">Collapse</span>}
-        </button>
+            <button
+              onClick={onToggle}
+              className="sidebar-item w-full"
+              style={{ justifyContent: collapsed ? "center" : "flex-start" }}
+              title={collapsed ? "Expand" : "Collapse"}
+              suppressHydrationWarning
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: 22,
+                  flexShrink: 0,
+                  transition: "transform 0.3s",
+                  transform: collapsed ? "rotate(0)" : "rotate(180deg)",
+                }}
+              >
+                chevron_right
+              </span>
+              {!collapsed && <span className="whitespace-nowrap">Collapse</span>}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
