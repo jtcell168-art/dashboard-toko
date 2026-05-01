@@ -36,11 +36,41 @@ export async function getInventory(branchId = "all") {
       return [];
     }
     
-    // Flatten categories and filter stock for the frontend
+    // Fetch IMEI counts for all products to ensure sync
+    const { data: imeiCounts } = await supabase
+      .from("imei_records")
+      .select("product_id, branch_id")
+      .eq("status", "available");
+
+    // Flatten categories and calculate real-time stock
     return data.map(p => {
+      const isHP = p.categories?.name === "HP";
       let filteredStock = p.stock || [];
       
-      // If user is not owner/manager, only show their branch stock
+      if (isHP && imeiCounts) {
+        // Recalculate stock based on IMEI for HP
+        const branchCounts = {};
+        imeiCounts
+          .filter(i => i.product_id === p.id)
+          .forEach(i => {
+            branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
+          });
+        
+        // Map back to filteredStock structure
+        filteredStock = filteredStock.map(s => ({
+          ...s,
+          quantity: branchCounts[s.branch_id] || 0
+        }));
+
+        // Add missing branches if they have IMEIs but no stock record yet
+        Object.entries(branchCounts).forEach(([bId, count]) => {
+          if (!filteredStock.find(s => s.branch_id === bId)) {
+            filteredStock.push({ branch_id: bId, quantity: count });
+          }
+        });
+      }
+
+      // Filter by branch for staff
       if (branchId !== "all" && user?.role !== "owner" && user?.role !== "manager") {
         filteredStock = filteredStock.filter(s => s.branch_id === branchId);
       }
@@ -73,51 +103,82 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
       .eq("name", productData.category)
       .maybeSingle();
 
-    const insertData = {
-      name: productData.name,
-      sku: productData.sku,
-      category_id: catData?.id,
-      retail_price: productData.retailPrice,
-      purchase_price: productData.purchasePrice
-    };
-
-    const { data: product, error: prodError } = await supabase
+    // 1. Cek apakah SKU sudah ada
+    const { data: existingProduct } = await supabase
       .from("products")
-      .insert(insertData)
-      .select()
-      .single();
+      .select("id")
+      .eq("sku", productData.sku)
+      .maybeSingle();
 
-    if (prodError) return { success: false, error: `Gagal menyimpan produk: ${prodError.message}` };
+    let productId;
 
-    // Insert initial stock
+    if (existingProduct) {
+      productId = existingProduct.id;
+    } else {
+      const insertData = {
+        name: productData.name,
+        sku: productData.sku,
+        category_id: catData?.id,
+        retail_price: productData.retailPrice,
+        purchase_price: productData.purchasePrice
+      };
+
+      const { data: product, error: prodError } = await supabase
+        .from("products")
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (prodError) return { success: false, error: `Gagal menyimpan produk: ${prodError.message}` };
+      productId = product.id;
+    }
+
+    // 2. Update atau Insert Stok per Cabang
     if (initialStockMap) {
-      const stockInserts = Object.keys(initialStockMap)
-        .filter(branchId => initialStockMap[branchId] > 0)
-        .map((branchId) => ({
-          product_id: product.id,
-          branch_id: branchId,
-          quantity: initialStockMap[branchId]
-        }));
-        
-      if (stockInserts.length > 0) {
-        const { error: stockError } = await supabase.from("stock").insert(stockInserts);
-        if (stockError) console.error("Stock insert error:", stockError);
+      for (const branchId of Object.keys(initialStockMap)) {
+        const qty = Number(initialStockMap[branchId]);
+        if (qty <= 0) continue;
+
+        // Cek apakah sudah ada baris stok untuk produk & cabang ini
+        const { data: existingStock } = await supabase
+          .from("product_stock")
+          .select("id, quantity")
+          .eq("product_id", productId)
+          .eq("branch_id", branchId)
+          .maybeSingle();
+
+        if (existingStock) {
+          // Tambahkan stok ke yang sudah ada
+          await supabase
+            .from("product_stock")
+            .update({ quantity: (existingStock.quantity || 0) + qty })
+            .eq("id", existingStock.id);
+        } else {
+          // Buat baris stok baru
+          await supabase
+            .from("product_stock")
+            .insert({
+              product_id: productId,
+              branch_id: branchId,
+              quantity: qty
+            });
+        }
       }
     }
 
-    // Insert IMEIs
-    if (productData.category === "HP" && imeiList.length > 0) {
+    // 3. Insert IMEIs
+    if (imeiList && imeiList.length > 0) {
       const imeiInserts = imeiList.map(item => ({
-        product_id: product.id,
+        product_id: productId,
         branch_id: item.branchId,
         imei: item.imei,
-        status: 'stock'
+        status: 'available'
       }));
       const { error: imeiError } = await supabase.from("imei_records").insert(imeiInserts);
-      if (imeiError) console.error("IMEI insert error:", imeiError);
+      if (imeiError) return { success: false, error: "Gagal menyimpan IMEI: " + imeiError.message };
     }
 
-    return { success: true, data: product };
+    return { success: true, data: { id: productId } };
   } catch (err) {
     return { success: false, error: err.message };
   }

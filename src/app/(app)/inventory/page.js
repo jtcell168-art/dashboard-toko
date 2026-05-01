@@ -34,9 +34,11 @@ export default function InventoryPage() {
   const [showScanner, setShowScanner] = useState(false);
   const [manualImei, setManualImei] = useState("");
   const [selectedManualBranch, setSelectedManualBranch] = useState("");
+  const [isMounted, setIsMounted] = useState(false);
 
   // Load data
   useEffect(() => {
+    setIsMounted(true);
     async function loadData() {
       setIsLoading(true);
       const user = await getCurrentUser();
@@ -149,14 +151,67 @@ export default function InventoryPage() {
     } catch (err) { alert("Terjadi kesalahan sistem: " + err.message); }
   };
 
-  const handleAddImei = (imei, branchId) => {
-    if (!imei) return;
-    if (imeiList.some(i => i.imei === imei)) return alert("IMEI sudah ada di daftar!");
-    setImeiList([...imeiList, { imei, branchId }]);
+  const handleAddImei = (imeiString, branchId) => {
+    if (!imeiString || !branchId) return;
+    
+    // Split by newline, comma, or space and clean up
+    const newImeis = imeiString
+      .split(/[\n, ]+/)
+      .map(i => i.trim())
+      .filter(i => i.length > 0);
+
+    if (newImeis.length === 0) return;
+
+    const currentImeis = [...imeiList];
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    newImeis.forEach(imei => {
+      if (currentImeis.some(i => i.imei === imei)) {
+        skippedCount++;
+      } else {
+        currentImeis.push({ imei, branchId });
+        addedCount++;
+      }
+    });
+
+    setImeiList(currentImeis);
+
+    // Auto-update stock count in addForm for that branch
+    const branch = branches.find(b => b.id === branchId);
+    if (branch) {
+      const branchName = branch.name.toLowerCase();
+      const countInBranch = currentImeis.filter(i => i.branchId === branchId).length;
+      
+      if (branchName.includes("ruteng")) setAddForm(prev => ({ ...prev, stockA: String(countInBranch) }));
+      else if (branchName.includes("larantuka")) setAddForm(prev => ({ ...prev, stockB: String(countInBranch) }));
+      else if (branchName.includes("riung")) setAddForm(prev => ({ ...prev, stockC: String(countInBranch) }));
+    }
+
+    if (skippedCount > 0) {
+      alert(`${addedCount} IMEI berhasil ditambahkan, ${skippedCount} IMEI dilewati karena sudah ada.`);
+    }
   };
 
   const removeImei = (imei) => {
-    setImeiList(imeiList.filter(i => i.imei !== imei));
+    const updated = imeiList.filter(i => i.imei !== imei);
+    setImeiList(updated);
+    
+    // Update stock counts after removal
+    const stocks = { stockA: 0, stockB: 0, stockC: 0 };
+    updated.forEach(item => {
+      const b = branches.find(br => br.id === item.branchId);
+      if (b?.name.toLowerCase().includes("ruteng")) stocks.stockA++;
+      else if (b?.name.toLowerCase().includes("larantuka")) stocks.stockB++;
+      else if (b?.name.toLowerCase().includes("riung")) stocks.stockC++;
+    });
+
+    setAddForm(prev => ({ 
+      ...prev, 
+      stockA: String(stocks.stockA), 
+      stockB: String(stocks.stockB), 
+      stockC: String(stocks.stockC) 
+    }));
   };
 
   const startEdit = (product) => {
@@ -335,39 +390,44 @@ export default function InventoryPage() {
                 </div>
 
                 {/* Manual Input Opsi */}
-                <div className="flex flex-col sm:flex-row gap-2 items-end bg-white/5 p-3 rounded-xl border border-white/10">
-                  <div className="flex-1 flex flex-col gap-1.5 w-full">
-                    <label className="text-[10px] text-white/40 uppercase font-bold">Input Manual IMEI</label>
-                    <input 
-                      className="input-field py-2 text-sm" 
-                      placeholder="Masukkan nomor IMEI" 
+                <div className="flex flex-col gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="text-[10px] text-white/40 uppercase font-bold">Input Manual / Paste IMEI (Bisa Banyak)</label>
+                    <textarea 
+                      className="input-field py-2 text-sm min-h-[80px] font-mono" 
+                      placeholder="Masukkan IMEI... &#10;Bisa banyak sekaligus (Pisahkan dengan Enter atau Koma)" 
                       value={manualImei} 
                       onChange={e => setManualImei(e.target.value)}
                     />
                   </div>
-                  <div className="w-full sm:w-40 flex flex-col gap-1.5">
-                    <label className="text-[10px] text-white/40 uppercase font-bold">Cabang</label>
-                    <select 
-                      className="input-field py-2 text-xs" 
-                      value={selectedManualBranch} 
-                      onChange={e => setSelectedManualBranch(e.target.value)}
+                  <div className="flex flex-col sm:flex-row gap-2 items-center">
+                    <div className="w-full sm:w-60 flex flex-col gap-1.5">
+                      <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Cabang untuk IMEI ini</label>
+                      <select 
+                        className="input-field py-2 text-xs" 
+                        value={selectedManualBranch} 
+                        onChange={e => setSelectedManualBranch(e.target.value)}
+                      >
+                        <option value="">Pilih Cabang</option>
+                        {branches.map(b => (
+                          <option key={b.id} value={b.id}>{b.name.split(' ')[2] || b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (!manualImei || !selectedManualBranch) return alert("Pilih cabang dan isi IMEI!");
+                        handleAddImei(manualImei, selectedManualBranch);
+                        setManualImei("");
+                      }}
+                      className="btn-gradient px-6 py-2 text-sm h-[38px] w-full sm:w-auto mt-auto"
                     >
-                      <option value="">Pilih Cabang</option>
-                      {branches.map(b => (
-                        <option key={b.id} value={b.id}>{b.name.split(' ')[2] || b.name}</option>
-                      ))}
-                    </select>
+                      <span className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">add_task</span>
+                        Tambah Massal
+                      </span>
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => {
-                      if (!manualImei || !selectedManualBranch) return alert("Pilih cabang dan isi IMEI!");
-                      handleAddImei(manualImei, selectedManualBranch);
-                      setManualImei("");
-                    }}
-                    className="btn-gradient px-6 py-2 text-sm h-[38px] w-full sm:w-auto"
-                  >
-                    Tambah
-                  </button>
                 </div>
 
                 {/* IMEI List Display */}
@@ -411,12 +471,14 @@ export default function InventoryPage() {
             placeholder="Cari produk, SKU, IMEI..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            suppressHydrationWarning
           />
         </div>
         <select
           className="input-field w-auto min-w-[140px] appearance-none"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
+          suppressHydrationWarning
         >
           <option value="name">Urutkan: Nama</option>
           <option value="stock-low">Stok: Terendah</option>
@@ -740,6 +802,12 @@ export default function InventoryPage() {
       )}
     </div>
   );
+}
+
+// Wrap with isMounted check for dynamic data
+function DynamicValue({ children, isMounted }) {
+  if (!isMounted) return <span className="opacity-0">...</span>;
+  return children;
 }
 
 function StockBadge({ count, label }) {
