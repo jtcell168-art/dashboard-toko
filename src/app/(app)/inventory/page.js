@@ -122,18 +122,22 @@ export default function InventoryPage() {
       if (lara) stockMap[lara.id] = Number(addForm.stockB);
       if (riung) stockMap[riung.id] = Number(addForm.stockC);
 
-      await addProduct({
+      const res = await addProduct({
         name: addForm.name, sku: addForm.sku, category: addForm.category,
         retailPrice: Number(addForm.sellPrice), purchasePrice: Number(addForm.buyPrice),
         isService: false, isDigital: false
       }, stockMap, imeiList);
+
+      if (res.error) {
+        return alert(res.error);
+      }
 
       alert(`Produk berhasil ditambahkan!`);
       setShowAddForm(false);
       setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0" });
       setImeiList([]);
       window.location.reload(); 
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert("Terjadi kesalahan sistem: " + err.message); }
   };
 
   const handleAddImei = (imei, branchId) => {
@@ -155,15 +159,18 @@ export default function InventoryPage() {
   const handleSaveEdit = async () => {
     if (!editForm.name || !editForm.sku) return alert("Nama dan SKU wajib diisi!");
     try {
-      await updateProduct(editingId, {
+      const res = await updateProduct(editingId, {
         name: editForm.name, sku: editForm.sku, category: editForm.category,
         retailPrice: Number(editForm.sellPrice), purchasePrice: Number(editForm.buyPrice)
       });
+      if (res.error) {
+        return alert(res.error);
+      }
       alert(`Produk berhasil diupdate!`);
       setEditingId(null);
       setEditForm(null);
       window.location.reload();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert("Terjadi kesalahan sistem: " + err.message); }
   };
 
   const handleDelete = async (id) => {
