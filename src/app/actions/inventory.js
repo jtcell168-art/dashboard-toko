@@ -3,10 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "./auth";
 
 // GET INVENTORY
-export async function getInventory() {
+export async function getInventory(branchId = "all") {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    const user = await getCurrentUser();
+    
+    let query = supabase
       .from("products")
       .select(`
         *,
@@ -20,16 +22,35 @@ export async function getInventory() {
       `)
       .order("created_at", { ascending: false });
 
+    // If not owner/manager and has a specific branch, we could filter products?
+    // But usually we want to see all products, but filter the STOCK shown.
+    // However, if we want to filter the product list to only what's available at the branch:
+    // if (branchId !== "all" && user.role !== 'owner' && user.role !== 'manager') {
+    //   query = query.eq('stock.branch_id', branchId);
+    // }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error("Error fetching inventory:", error);
       return [];
     }
     
-    // Flatten categories for the frontend
-    return data.map(p => ({
-      ...p,
-      category: p.categories?.name || "Uncategorized"
-    }));
+    // Flatten categories and filter stock for the frontend
+    return data.map(p => {
+      let filteredStock = p.stock || [];
+      
+      // If user is not owner/manager, only show their branch stock
+      if (branchId !== "all" && user?.role !== "owner" && user?.role !== "manager") {
+        filteredStock = filteredStock.filter(s => s.branch_id === branchId);
+      }
+
+      return {
+        ...p,
+        category: p.categories?.name || "Uncategorized",
+        stock: filteredStock
+      };
+    });
   } catch (err) {
     console.error("Critical error in getInventory:", err);
     return [];

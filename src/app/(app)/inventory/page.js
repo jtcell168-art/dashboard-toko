@@ -39,22 +39,28 @@ export default function InventoryPage() {
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
-      const [user, data, branchList] = await Promise.all([
-        getCurrentUser(),
-        getInventory(),
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      
+      const [data, branchList] = await Promise.all([
+        getInventory(user?.branch_id || "all"),
         getBranches()
       ]);
-      setCurrentUser(user);
       setBranches(branchList);
 
-      // Calculate derived stock A, B, C for UI matching
       const mapped = data.map(p => {
-        let stockA = 0, stockB = 0, stockC = 0;
-        p.stock.forEach(s => {
-          if (s.branches?.name?.toLowerCase().includes("ruteng")) stockA = s.quantity;
-          else if (s.branches?.name?.toLowerCase().includes("larantuka")) stockB = s.quantity;
-          else stockC = s.quantity;
+        // Map stock based on branch names/IDs dynamically
+        const stocks = {};
+        branchList.forEach(b => {
+          const s = p.stock.find(st => st.branch_id === b.id);
+          stocks[b.id] = s ? s.quantity : 0;
         });
+
+        // Helper for summary and sorting (A=Ruteng, B=Larantuka, C=Riung for legacy compatibility if needed)
+        const rutengId = branchList.find(b => b.name.toLowerCase().includes("ruteng"))?.id;
+        const laraId = branchList.find(b => b.name.toLowerCase().includes("larantuka"))?.id;
+        const riungId = branchList.find(b => b.name.toLowerCase().includes("riung"))?.id;
+
         return {
           id: p.id,
           name: p.name,
@@ -62,7 +68,10 @@ export default function InventoryPage() {
           category: p.category,
           buyPrice: p.purchase_price,
           sellPrice: p.retail_price,
-          stockA, stockB, stockC,
+          stockA: rutengId ? stocks[rutengId] : 0,
+          stockB: laraId ? stocks[laraId] : 0,
+          stockC: riungId ? stocks[riungId] : 0,
+          stocks, // Full map for dynamic rendering
           originalStock: p.stock
         };
       });
@@ -469,18 +478,22 @@ export default function InventoryPage() {
               <tr>
                 <th>Produk</th>
                 <th>SKU</th>
-                <th style={{ textAlign: "center" }}>Ruteng</th>
-                <th style={{ textAlign: "center" }}>Larantuka</th>
-                <th style={{ textAlign: "center" }}>Riung</th>
+                {hasAccess ? (
+                  branches.map(b => (
+                    <th key={b.id} style={{ textAlign: "center" }}>{b.name.split(' ')[2] || b.name}</th>
+                  ))
+                ) : (
+                  <th style={{ textAlign: "center" }}>Stok</th>
+                )}
                 <th style={{ textAlign: "center" }}>Total</th>
                 {canSeeBuyPrice && <th style={{ textAlign: "right" }}>Harga Beli</th>}
                 <th style={{ textAlign: "right" }}>Harga Jual</th>
-                <th style={{ textAlign: "center" }}>Aksi</th>
+                {hasAccess && <th style={{ textAlign: "center" }}>Aksi</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.map((product) => {
-                const total = product.stockA + product.stockB + product.stockC;
+                const total = Object.values(product.stocks || {}).reduce((a, b) => a + b, 0);
                 const isLow = total < 5;
                 return (
                   <tr key={product.id}>
@@ -491,15 +504,17 @@ export default function InventoryPage() {
                     <td>
                       <code className="text-[11px] text-white/40 font-mono">{product.sku}</code>
                     </td>
-                    <td style={{ textAlign: "center" }}>
-                      <StockBadge count={product.stockA} />
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <StockBadge count={product.stockB} />
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <StockBadge count={product.stockC} />
-                    </td>
+                    {hasAccess ? (
+                      branches.map(b => (
+                        <td key={b.id} style={{ textAlign: "center" }}>
+                          <StockBadge count={product.stocks?.[b.id] || 0} />
+                        </td>
+                      ))
+                    ) : (
+                      <td style={{ textAlign: "center" }}>
+                        <StockBadge count={product.stocks?.[currentUser?.branch_id] || 0} />
+                      </td>
+                    )}
                     <td style={{ textAlign: "center" }}>
                       <span className={`text-sm font-bold tabular-nums ${isLow ? "text-red-400" : "text-white"}`}>
                         {total}
@@ -573,8 +588,7 @@ export default function InventoryPage() {
         {/* Mobile List */}
         <div className="md:hidden divide-y divide-white/[0.04]">
           {filtered.map((product) => {
-            const total = product.stockA + product.stockB + product.stockC;
-            const isLow = total < 5;
+            const total = Object.values(product.stocks || {}).reduce((a, b) => a + b, 0);
             return (
               <div key={product.id} className="px-4 py-3.5 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
@@ -583,9 +597,13 @@ export default function InventoryPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <div className="flex items-center gap-1.5 justify-end">
-                    <StockBadge count={product.stockA} label="R" />
-                    <StockBadge count={product.stockB} label="L" />
-                    <StockBadge count={product.stockC} label="Ri" />
+                    {hasAccess ? (
+                      branches.map(b => (
+                        <StockBadge key={b.id} count={product.stocks?.[b.id] || 0} label={b.name.substring(0, 1)} />
+                      ))
+                    ) : (
+                      <StockBadge count={product.stocks?.[currentUser?.branch_id] || 0} label="Stok" />
+                    )}
                   </div>
                   {product.sellPrice > 0 && (
                     <p className="text-[11px] text-white/50 mt-1 tabular-nums">{formatRupiah(product.sellPrice)}</p>
