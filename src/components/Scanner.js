@@ -53,8 +53,12 @@ export default function Scanner({ onScan, onClose, title = "Scan Barcode / IMEI"
     startScanner();
 
     return () => {
-      if (html5QrCode.isScanning) {
-        html5QrCode.stop().catch(err => console.error("Cleanup stop failed", err));
+      try {
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().catch(err => console.log("Cleanup stop failed", err));
+        }
+      } catch (e) {
+        console.log("Cleanup catch:", e);
       }
     };
   }, [onScan, onClose]);

@@ -42,17 +42,22 @@ export default function IMEIScanner({ onScan, onClose }) {
     startScanner();
 
     return () => {
-      if (html5QrCodeRef.current) {
-        html5QrCodeRef.current.stop().catch(e => console.log(e));
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        html5QrCodeRef.current.stop().catch(e => console.log("Cleanup error:", e));
       }
     };
   }, []);
 
   const stopAndClose = async () => {
-    if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-      await html5QrCodeRef.current.stop();
+    try {
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        await html5QrCodeRef.current.stop();
+      }
+    } catch (e) {
+      console.log("Stop error:", e);
+    } finally {
+      onClose();
     }
-    onClose();
   };
 
   return (
