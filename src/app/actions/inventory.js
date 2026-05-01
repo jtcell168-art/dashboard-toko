@@ -9,6 +9,7 @@ export async function getInventory() {
     .from("products")
     .select(`
       *,
+      categories ( name ),
       stock (
         id,
         branch_id,
@@ -22,7 +23,12 @@ export async function getInventory() {
     console.error("Error fetching inventory:", error);
     return [];
   }
-  return data;
+  
+  // Flatten categories for the frontend
+  return data.map(p => ({
+    ...p,
+    category: p.categories?.name
+  }));
 }
 
 // ADD PRODUCT
@@ -33,31 +39,47 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
     throw new Error("Unauthorized");
   }
 
+  // Get category_id from name
+  const { data: catData, error: catError } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("name", productData.category)
+    .single();
+
+  if (catError) {
+    console.error("Category error:", catError);
+    // If category not found, we still proceed but with null category or throw error?
+    // Let's throw error to be safe as it's a required selection in UI
+    throw new Error(`Kategori '${productData.category}' tidak ditemukan di database.`);
+  }
+
   const { data: product, error: prodError } = await supabase
     .from("products")
     .insert({
       name: productData.name,
       sku: productData.sku,
-      category: productData.category,
+      category_id: catData?.id,
       retail_price: productData.retailPrice,
-      purchase_price: productData.purchasePrice,
-      is_service: productData.isService,
-      is_digital: productData.isDigital
+      purchase_price: productData.purchasePrice
     })
     .select()
     .single();
 
-  if (prodError) throw new Error(prodError.message);
+  if (prodError) throw new Error(`Gagal menyimpan produk: ${prodError.message}`);
 
   // Insert initial stock
   if (!productData.isService && !productData.isDigital && initialStockMap) {
-    const stockInserts = Object.keys(initialStockMap).map((branchId) => ({
-      product_id: product.id,
-      branch_id: branchId,
-      quantity: initialStockMap[branchId]
-    }));
+    const stockInserts = Object.keys(initialStockMap)
+      .filter(branchId => initialStockMap[branchId] > 0) // Only insert if stock > 0 to avoid clutter
+      .map((branchId) => ({
+        product_id: product.id,
+        branch_id: branchId,
+        quantity: initialStockMap[branchId]
+      }));
+      
     if (stockInserts.length > 0) {
-      await supabase.from("stock").insert(stockInserts);
+      const { error: stockError } = await supabase.from("stock").insert(stockInserts);
+      if (stockError) throw new Error(`Gagal menyimpan stok: ${stockError.message}`);
     }
   }
 
@@ -70,7 +92,7 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
       status: 'stock'
     }));
     const { error: imeiError } = await supabase.from("imei_records").insert(imeiInserts);
-    if (imeiError) console.error("Error inserting IMEIs:", imeiError);
+    if (imeiError) throw new Error(`Gagal menyimpan data IMEI: ${imeiError.message}`);
   }
 
   return product;
@@ -84,12 +106,19 @@ export async function updateProduct(productId, productData) {
     throw new Error("Unauthorized");
   }
 
+  // Get category_id from name
+  const { data: catData } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("name", productData.category)
+    .single();
+
   const { error } = await supabase
     .from("products")
     .update({
       name: productData.name,
       sku: productData.sku,
-      category: productData.category,
+      category_id: catData?.id,
       retail_price: productData.retailPrice,
       purchase_price: productData.purchasePrice,
     })
