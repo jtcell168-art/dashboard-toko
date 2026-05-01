@@ -10,7 +10,10 @@ const PAYMENT_METHODS = [
   { id: "cash", label: "Cash", icon: "payments" },
   { id: "transfer", label: "Transfer", icon: "account_balance" },
   { id: "qris", label: "QRIS", icon: "qr_code_2" },
+  { id: "credit", label: "Credit", icon: "credit_card" },
 ];
+
+const CREDIT_PROVIDERS = ["Vast Finance", "Kredivo Reguler", "Yess Kredit", "Spektra", "Bank"];
 
 export default function RetailPOSPage() {
   const [search, setSearch] = useState("");
@@ -19,6 +22,8 @@ export default function RetailPOSPage() {
   const [discountPercent, setDiscountPercent] = useState("");
   const [showReceipt, setShowReceipt] = useState(false);
   const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [creditProvider, setCreditProvider] = useState(CREDIT_PROVIDERS[0]);
 
   const [dbProducts, setDbProducts] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
@@ -89,7 +94,9 @@ export default function RetailPOSPage() {
         paymentMethod,
         customerName,
         currentUser?.branch_id || "all",
-        currentUser?.id
+        currentUser?.id,
+        customerPhone,
+        creditProvider
       );
       setShowReceipt(true);
       
@@ -107,6 +114,8 @@ export default function RetailPOSPage() {
     setCart([]);
     setDiscountPercent("");
     setCustomerName("");
+    setCustomerPhone("");
+    setCreditProvider(CREDIT_PROVIDERS[0]);
     setShowReceipt(false);
   };
 
@@ -270,13 +279,21 @@ export default function RetailPOSPage() {
               {/* Divider */}
               <div className="h-px bg-white/[0.06]" />
 
-              {/* Customer (optional) */}
-              <input
-                className="input-field text-xs"
-                placeholder="Nama pelanggan (opsional)"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-              />
+              {/* Customer Info */}
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  className="input-field text-xs"
+                  placeholder="Nama pelanggan"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                />
+                <input
+                  className="input-field text-xs"
+                  placeholder="No. HP"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                />
+              </div>
 
               {/* Discount */}
               <div className="flex items-center gap-2">
@@ -297,23 +314,39 @@ export default function RetailPOSPage() {
               <p className="text-[10px] text-white/20 -mt-1 ml-1">Maks diskon: 1.5% (Owner)</p>
 
               {/* Payment Method */}
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {PAYMENT_METHODS.map((pm) => (
                   <button
                     key={pm.id}
                     onClick={() => setPaymentMethod(pm.id)}
-                    className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg text-xs font-medium transition-all"
+                    className="flex flex-col items-center gap-1 py-2.5 rounded-lg text-[11px] font-medium transition-all"
                     style={
                       paymentMethod === pm.id
                         ? { background: "rgba(99,102,241,0.12)", color: "#818CF8", border: "1px solid rgba(99,102,241,0.3)" }
                         : { background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.06)" }
                     }
                   >
-                    <span className="material-symbols-outlined text-[18px]">{pm.icon}</span>
+                    <span className="material-symbols-outlined text-[16px]">{pm.icon}</span>
                     {pm.label}
                   </button>
                 ))}
               </div>
+
+              {/* Credit Provider Dropdown */}
+              {paymentMethod === "credit" && (
+                <div className="flex flex-col gap-1.5 animate-fade-slide-up">
+                  <label className="text-[10px] text-white/40 uppercase font-bold ml-1">Finance / Bank</label>
+                  <select 
+                    className="input-field text-xs py-2"
+                    value={creditProvider}
+                    onChange={(e) => setCreditProvider(e.target.value)}
+                  >
+                    {CREDIT_PROVIDERS.map(cp => (
+                      <option key={cp} value={cp}>{cp}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Totals */}
               <div className="flex flex-col gap-1.5 py-2">

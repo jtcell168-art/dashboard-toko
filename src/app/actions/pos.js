@@ -45,7 +45,7 @@ export async function getPosProducts(branchId = "all") {
 }
 
 // Proses Transaksi
-export async function processTransaction(cart, discountAmount, paymentMethod, customerName, branchId, userId) {
+export async function processTransaction(cart, discountAmount, paymentMethod, customerName, branchId, userId, customerPhone = "", creditProvider = "") {
   const supabase = await createClient();
   
   const subtotal = cart.reduce((sum, item) => sum + item.sellPrice * item.qty, 0);
@@ -65,6 +65,8 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
       total: total,
       payment_method: paymentMethod,
       customer_name: customerName,
+      customer_phone: customerPhone,
+      credit_provider: paymentMethod === 'credit' ? creditProvider : null,
       status: "completed"
     })
     .select()
@@ -103,4 +105,30 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
   }
 
   return transaction;
+}
+
+// HAPUS TRANSAKSI (Hanya Owner)
+export async function deleteTransaction(transactionId) {
+  const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  
+  if (!authUser) throw new Error("Unauthorized");
+  
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", authUser.id)
+    .single();
+
+  if (profile?.role !== "owner") {
+    throw new Error("Hanya owner yang diizinkan menghapus transaksi.");
+  }
+
+  const { error } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", transactionId);
+
+  if (error) throw new Error(error.message);
+  return true;
 }

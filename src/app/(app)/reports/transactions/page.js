@@ -3,10 +3,13 @@ import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { createClient } from "@/lib/supabase/client";
 import { exportToCSV } from "@/lib/utils/export";
+import { deleteTransaction } from "@/app/actions/pos";
+import { getCurrentUser } from "@/app/actions/auth";
 
 export default function TransactionReportPage() {
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -19,21 +22,38 @@ export default function TransactionReportPage() {
   useEffect(() => {
     async function load() {
       setIsLoading(true);
-      const supabase = createClient();
-      let query = supabase
-        .from("transactions")
-        .select("*, profiles(full_name), branches(name)")
-        .order("created_at", { ascending: false });
-        
-      if (startDate) query = query.gte("created_at", startDate);
-      if (endDate) query = query.lte("created_at", endDate + "T23:59:59");
-
-      const { data: trx } = await query;
+      const [user, { data: trx }] = await Promise.all([
+        getCurrentUser(),
+        (async () => {
+          const supabase = createClient();
+          let query = supabase
+            .from("transactions")
+            .select("*, profiles(full_name), branches(name)")
+            .order("created_at", { ascending: false });
+            
+          if (startDate) query = query.gte("created_at", startDate);
+          if (endDate) query = query.lte("created_at", endDate + "T23:59:59");
+          return await query;
+        })()
+      ]);
+      
+      setCurrentUser(user);
       setData(trx || []);
       setIsLoading(false);
     }
     load();
   }, [startDate, endDate]);
+
+  const handleDelete = async (id) => {
+    if (!confirm("Yakin ingin menghapus transaksi ini? Data akan terhapus permanen dari database.")) return;
+    try {
+      await deleteTransaction(id);
+      setData(data.filter(d => d.id !== id));
+      alert("Transaksi berhasil dihapus.");
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const totalRevenue = data.reduce((sum, d) => sum + Number(d.total || 0), 0);
 
@@ -113,8 +133,9 @@ export default function TransactionReportPage() {
                   <th>Customer</th>
                   <th>Cabang</th>
                   <th>Tipe</th>
-                  <th style={{textAlign:"right"}}>Total</th>
+                   <th style={{textAlign:"right"}}>Total</th>
                   <th>Kasir</th>
+                  {currentUser?.role === "owner" && <th style={{textAlign:"center"}}>Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -127,6 +148,17 @@ export default function TransactionReportPage() {
                     <td><span className={`badge ${d.type === 'retail' ? 'indigo' : 'amber'}`}>{d.type}</span></td>
                     <td style={{textAlign:"right"}} className="text-sm font-bold text-white tabular-nums">{formatRupiah(d.total)}</td>
                     <td className="text-xs text-white/40">{d.profiles?.full_name}</td>
+                    {currentUser?.role === "owner" && (
+                      <td style={{textAlign:"center"}}>
+                        <button 
+                          onClick={() => handleDelete(d.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-all"
+                          title="Hapus Transaksi"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
