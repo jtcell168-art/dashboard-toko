@@ -1,46 +1,27 @@
+import * as XLSX from 'xlsx';
+
 /**
- * Utility to export data to CSV and trigger a browser download.
- * Excel can open these files perfectly.
+ * Utility to export data to Excel (.xlsx) and trigger a browser download.
  * @param {Array} data - Array of objects to export
  * @param {string} fileName - Name of the file (without extension)
  */
-export const exportToCSV = (data, fileName) => {
+export const exportToExcel = (data, fileName) => {
   if (!data || !data.length) {
     alert("Tidak ada data untuk diekspor");
     return;
   }
 
-  // 1. Get headers from the first object
-  const headers = Object.keys(data[0]);
-  
-  // 2. Build CSV rows
-  const csvRows = [
-    headers.join(","), // header row
-    ...data.map(row => 
-      headers.map(fieldName => {
-        let value = row[fieldName] ?? "";
-        // Handle strings with commas by wrapping in quotes
-        if (typeof value === 'string' && value.includes(',')) {
-          value = `"${value}"`;
-        }
-        return value;
-      }).join(",")
-    )
-  ];
+  // 1. Create a worksheet from the data
+  const worksheet = XLSX.utils.json_to_sheet(data);
 
-  const csvString = csvRows.join("\n");
-  
-  // 3. Create blob and download link
-  // Add UTF-8 BOM for Excel compatibility
-  const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  
-  link.setAttribute("href", url);
-  link.setAttribute("download", `${fileName}_${new Date().toISOString().split('T')[0]}.csv`);
-  link.style.visibility = 'hidden';
-  
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  // 2. Create a workbook and add the worksheet
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+  // 3. Generate Excel file and trigger download
+  const date = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(workbook, `${fileName}_${date}.xlsx`);
 };
+
+// Alias for backward compatibility if needed, though we'll update the calls
+export const exportToCSV = exportToExcel;

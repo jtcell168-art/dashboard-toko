@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { createClient } from "@/lib/supabase/client";
-import { exportToCSV } from "@/lib/utils/export";
+import { exportToExcel } from "@/lib/utils/export";
 import { deleteTransaction } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
 
@@ -80,7 +80,7 @@ export default function TransactionReportPage() {
                 Cabang: d.branches?.name,
                 Kasir: d.profiles?.full_name
               }));
-              exportToCSV(dataToExport, "Laporan_Transaksi_Detail");
+              exportToExcel(dataToExport, "Laporan_Transaksi_Detail");
             }}
             className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
           >

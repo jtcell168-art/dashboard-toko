@@ -5,7 +5,7 @@ import { formatRupiah } from "@/data/mockData";
 import { getInventory, addProduct, updateProduct, deleteProduct, updateProductPrice, getPriceHistory } from "@/app/actions/inventory";
 import { getCurrentUser } from "@/app/actions/auth";
 import { getBranches } from "@/app/actions/branches";
-import { exportToCSV } from "@/lib/utils/export";
+import { exportToExcel } from "@/lib/utils/export";
 import IMEIScanner from "@/components/inventory/IMEIScanner";
 
 const CATEGORIES = ["Semua", "HP", "Aksesori", "Sparepart"];
@@ -299,7 +299,7 @@ export default function InventoryPage() {
                   "Stok Riung": p.stockC,
                   "Total Stok": p.stockA + p.stockB + p.stockC
                 }));
-                exportToCSV(dataToExport, "Inventaris_JT_Cell");
+                exportToExcel(dataToExport, "Inventaris_JT_Cell");
               }}
               className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
             >
@@ -508,12 +508,20 @@ export default function InventoryPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="kpi-card indigo" style={{ padding: 16 }}>
           <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Unit</p>
-          <p className="text-2xl font-bold text-white tabular-nums">{totalItems.toLocaleString("id-ID")}</p>
+          <p className="text-2xl font-bold text-white tabular-nums">
+            <DynamicValue isMounted={isMounted}>
+              {totalItems.toLocaleString("id-ID")}
+            </DynamicValue>
+          </p>
         </div>
         <div className="kpi-card rose" style={{ padding: 16 }}>
           <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Stok Menipis</p>
           <div className="flex items-center gap-2">
-            <p className="text-2xl font-bold text-red-400 tabular-nums">{lowStockItems.length}</p>
+            <p className="text-2xl font-bold text-red-400 tabular-nums">
+              <DynamicValue isMounted={isMounted}>
+                {lowStockItems.length}
+              </DynamicValue>
+            </p>
             <span className="badge danger">Perlu restock</span>
           </div>
         </div>
@@ -579,7 +587,9 @@ export default function InventoryPage() {
                     )}
                     <td style={{ textAlign: "center" }}>
                       <span className={`text-sm font-bold tabular-nums ${isLow ? "text-red-400" : "text-white"}`}>
-                        {total}
+                        <DynamicValue isMounted={isMounted}>
+                          {total}
+                        </DynamicValue>
                       </span>
                     </td>
                     {canSeeBuyPrice && (

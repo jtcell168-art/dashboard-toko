@@ -4,7 +4,7 @@ import { formatRupiah } from "@/data/mockData";
 import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/app/actions/finance";
 import { getBranches } from "@/app/actions/branches";
 import { getCurrentUser } from "@/app/actions/auth";
-import { exportToCSV } from "@/lib/utils/export";
+import { exportToExcel } from "@/lib/utils/export";
 
 const CATEGORIES = ["Sewa Toko", "Listrik", "Internet", "Gaji", "Transportasi", "Maintenance", "Lainnya"];
 
@@ -117,7 +117,7 @@ export default function ExpensesPage() {
                 Cabang: e.branches?.name,
                 Catatan: e.note || "-"
               }));
-              exportToCSV(dataToExport, "Laporan_Biaya_Operasional");
+              exportToExcel(dataToExport, "Laporan_Biaya_Operasional");
             }}
             className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
           >
