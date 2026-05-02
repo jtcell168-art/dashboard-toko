@@ -10,8 +10,8 @@ import { exportToExcel } from "@/lib/utils/export";
 import { useBranch } from "@/context/BranchContext";
 import IMEIScanner from "@/components/inventory/IMEIScanner";
 
-const CATEGORIES = ["Semua", "HP", "Aksesori", "Sparepart"];
-const ADD_CATEGORIES = ["HP", "Aksesori", "Sparepart"];
+const CATEGORIES = ["Semua", "HP", "Aksesori", "Sparepart", "Kartu Perdana"];
+const ADD_CATEGORIES = ["HP", "Aksesori", "Sparepart", "Kartu Perdana"];
 
 export default function InventoryPage() {
   const { selectedBranch, isMounted: branchIsMounted } = useBranch();
