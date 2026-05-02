@@ -296,9 +296,9 @@ export default function DashboardPage() {
   const totalServices = (data.kpi.activeServices?.pending || 0) + (data.kpi.activeServices?.process || 0) + (data.kpi.activeServices?.done || 0);
 
   return (
-    <div className="flex flex-col gap-6 relative z-10" suppressHydrationWarning>
+    <div className="flex flex-col gap-6 relative z-10">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4" suppressHydrationWarning>
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="flex flex-col">
           <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-white/40 mt-1">Overview bisnis — Realtime</p>
