@@ -166,10 +166,13 @@ export async function addInstallment(data) {
 }
 
 // GET PNL DATA
-export async function getPnlData(selectedBranchId = "all") {
+export async function getPnlData(selectedBranchId = "all", customStart, customEnd) {
   try {
     const supabase = await createClient();
-    const user = await getCurrentUser();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return [];
+
+    const { data: user } = await supabase.from("profiles").select("*").eq("id", authUser.id).single();
     if (!user) return [];
 
     const isOwner = user.role === "owner";
@@ -181,50 +184,57 @@ export async function getPnlData(selectedBranchId = "all") {
     // Jika ada filter tanggal kustom
     if (customStart && customEnd) {
       let current = new Date(customStart);
-      const last = new Date(customEnd);
+      const end = new Date(customEnd);
 
-      while (current <= last) {
+      while (current <= end) {
         const dateStr = current.toISOString().split('T')[0];
         const displayDate = current.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
         
-        const dayStart = dateStr + "T00:00:00";
+        // Gunakan format yang sama dengan dashboard.js
+        const dayStart = dateStr;
         const dayEnd = dateStr + "T23:59:59";
 
-        // Query Items
-        let itemsQuery = supabase
-          .from("transaction_items")
-          .select("quantity, subtotal, purchase_price, transactions!inner(status, branch_id), products(purchase_price)")
-          .eq("transactions.status", "completed")
+        // Ambil ID transaksi yang completed di hari tersebut
+        let txQuery = supabase
+          .from("transactions")
+          .select("id")
+          .eq("status", "completed")
           .gte("created_at", dayStart)
           .lte("created_at", dayEnd);
         
-        if (targetBranchId) itemsQuery = itemsQuery.eq("transactions.branch_id", targetBranchId);
-        const { data: items } = await itemsQuery;
+        if (targetBranchId) txQuery = txQuery.eq("branch_id", targetBranchId);
+        const { data: txs } = await txQuery;
+        const txIds = (txs || []).map(t => t.id);
 
         let revenue = 0, cogs = 0;
-        (items || []).forEach(item => {
-          revenue += Number(item.subtotal);
-          let pPrice = (item.purchase_price && Number(item.purchase_price) > 0) ? Number(item.purchase_price) : (item.products?.purchase_price || 0);
-          cogs += pPrice * item.quantity;
-        });
+        if (txIds.length > 0) {
+          const { data: items } = await supabase
+            .from("transaction_items")
+            .select("subtotal, purchase_price, quantity, products(purchase_price)")
+            .in("transaction_id", txIds);
 
-        // Query Expenses
+          (items || []).forEach(item => {
+            revenue += Number(item.subtotal);
+            let pPrice = (item.purchase_price && Number(item.purchase_price) > 0) ? Number(item.purchase_price) : (item.products?.purchase_price || 0);
+            cogs += pPrice * (item.quantity || 1);
+          });
+        }
+
+        // Expenses & Salaries
         let expQuery = supabase.from("expenses").select("amount").eq("date", dateStr);
         if (targetBranchId) expQuery = expQuery.eq("branch_id", targetBranchId);
         const { data: expensesList } = await expQuery;
         const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
 
-        // Salaries
         let salaries = 0;
-        if (user.role === "owner") salaries = await getTotalSalaries(dayStart, dayEnd);
+        try { if (user.role === "owner") salaries = await getTotalSalaries(dayStart, dayEnd); } catch(e) {}
 
-        const totalExpenses = expenses + salaries;
         results.push({
           label: displayDate,
           revenue,
           cogs,
-          expenses: totalExpenses,
-          profit: revenue - cogs - totalExpenses
+          expenses: expenses + salaries,
+          profit: revenue - cogs - (expenses + salaries)
         });
 
         current.setDate(current.getDate() + 1);
@@ -234,42 +244,56 @@ export async function getPnlData(selectedBranchId = "all") {
       const now = new Date();
       for (let i = 5; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const month = d.toLocaleString('id-ID', { month: 'long' });
-        const startDate = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
-        const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+        const label = d.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+        
+        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        
+        const startStr = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-01`;
+        const endStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}T23:59:59`;
 
-        let itemsQuery = supabase
-          .from("transaction_items")
-          .select("quantity, subtotal, purchase_price, transactions!inner(status, branch_id), products(purchase_price)")
-          .eq("transactions.status", "completed")
-          .gte("created_at", startDate)
-          .lte("created_at", endDate + "T23:59:59");
-          
-        if (targetBranchId) itemsQuery = itemsQuery.eq("transactions.branch_id", targetBranchId);
-        const { data: items } = await itemsQuery;
+        // Ambil ID transaksi yang completed di bulan tersebut
+        let txQuery = supabase
+          .from("transactions")
+          .select("id")
+          .eq("status", "completed")
+          .gte("created_at", startStr)
+          .lte("created_at", endStr);
+        
+        if (targetBranchId) txQuery = txQuery.eq("branch_id", targetBranchId);
+        const { data: txs } = await txQuery;
+        const txIds = (txs || []).map(t => t.id);
 
         let revenue = 0, cogs = 0;
-        (items || []).forEach(item => {
-          revenue += Number(item.subtotal);
-          let pPrice = (item.purchase_price && Number(item.purchase_price) > 0) ? Number(item.purchase_price) : (item.products?.purchase_price || 0);
-          cogs += pPrice * item.quantity;
-        });
+        if (txIds.length > 0) {
+          const { data: items } = await supabase
+            .from("transaction_items")
+            .select("subtotal, purchase_price, quantity, products(purchase_price)")
+            .in("transaction_id", txIds);
 
-        let expQuery = supabase.from("expenses").select("amount").gte("date", startDate).lte("date", endDate);
+          (items || []).forEach(item => {
+            revenue += Number(item.subtotal);
+            let pPrice = (item.purchase_price && Number(item.purchase_price) > 0) ? Number(item.purchase_price) : (item.products?.purchase_price || 0);
+            cogs += pPrice * (item.quantity || 1);
+          });
+        }
+
+        let expQuery = supabase.from("expenses").select("amount")
+          .gte("date", startStr)
+          .lte("date", endStr.split('T')[0]);
         if (targetBranchId) expQuery = expQuery.eq("branch_id", targetBranchId);
         const { data: expensesList } = await expQuery;
         const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
 
         let salaries = 0;
-        if (user.role === "owner") salaries = await getTotalSalaries(startDate, endDate);
+        try { if (user.role === "owner") salaries = await getTotalSalaries(startStr, endStr); } catch(e) {}
 
-        const totalExpenses = expenses + salaries;
         results.push({
-          label: month,
+          label,
           revenue,
           cogs,
-          expenses: totalExpenses,
-          profit: revenue - cogs - totalExpenses
+          expenses: expenses + salaries,
+          profit: revenue - cogs - (expenses + salaries)
         });
       }
     }

@@ -73,6 +73,7 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
         <input
           className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all"
           placeholder="Cari produk, transaksi, customer..."
+          suppressHydrationWarning
         />
       </div>
 
