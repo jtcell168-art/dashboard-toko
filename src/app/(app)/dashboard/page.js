@@ -289,7 +289,12 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !data || !branchIsMounted) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (loading || !data || !branchIsMounted || !mounted) {
     return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dashboard...</div>;
   }
 
