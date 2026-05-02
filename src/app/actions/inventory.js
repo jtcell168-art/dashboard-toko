@@ -320,3 +320,86 @@ export async function getPriceHistory(productId) {
   }
   return data;
 }
+
+// BULK IMPORT PRODUCTS
+export async function bulkImportProducts(productsArray) {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "owner" && user.role !== "manager")) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // 1. Get Categories & Branches Mapping
+    const [{ data: categories }, { data: branches }] = await Promise.all([
+      supabase.from("categories").select("id, name"),
+      supabase.from("branches").select("id, name")
+    ]);
+
+    const catMap = {};
+    categories?.forEach(c => catMap[c.name.toLowerCase()] = c.id);
+
+    const branchMap = {};
+    branches?.forEach(b => {
+      const name = b.name.toLowerCase();
+      if (name.includes("ruteng")) branchMap.ruteng = b.id;
+      else if (name.includes("larantuka")) branchMap.larantuka = b.id;
+      else if (name.includes("riung")) branchMap.riung = b.id;
+    });
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // 2. Process each product
+    for (const item of productsArray) {
+      try {
+        const catId = catMap[item.category?.toLowerCase()] || null;
+        
+        // Upsert Product by SKU
+        const { data: product, error: prodError } = await supabase
+          .from("products")
+          .upsert({
+            name: item.name,
+            sku: item.sku,
+            category_id: catId,
+            purchase_price: Number(item.buyPrice || 0),
+            retail_price: Number(item.sellPrice || 0),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'sku' })
+          .select()
+          .single();
+
+        if (prodError) throw prodError;
+
+        // Upsert Stocks
+        const stockInserts = [];
+        if (item.stockRuteng !== undefined && branchMap.ruteng) {
+          stockInserts.push({ product_id: product.id, branch_id: branchMap.ruteng, quantity: Number(item.stockRuteng) });
+        }
+        if (item.stockLarantuka !== undefined && branchMap.larantuka) {
+          stockInserts.push({ product_id: product.id, branch_id: branchMap.larantuka, quantity: Number(item.stockLarantuka) });
+        }
+        if (item.stockRiung !== undefined && branchMap.riung) {
+          stockInserts.push({ product_id: product.id, branch_id: branchMap.riung, quantity: Number(item.stockRiung) });
+        }
+
+        if (stockInserts.length > 0) {
+          const { error: stockError } = await supabase
+            .from("stock")
+            .upsert(stockInserts, { onConflict: 'product_id,branch_id' });
+          if (stockError) console.error("Stock error for SKU " + item.sku, stockError);
+        }
+
+        successCount++;
+      } catch (e) {
+        console.error("Error importing SKU " + item.sku, e);
+        errorCount++;
+      }
+    }
+
+    return { success: true, successCount, errorCount };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+

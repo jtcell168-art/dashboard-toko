@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
-import { getInventory, addProduct, updateProduct, deleteProduct, updateProductPrice, getPriceHistory } from "@/app/actions/inventory";
+import { getInventory, addProduct, updateProduct, deleteProduct, updateProductPrice, getPriceHistory, bulkImportProducts } from "@/app/actions/inventory";
+import * as XLSX from "xlsx";
 import { fixNokiaStock, migrateImeiStatus } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
 import { getBranches } from "@/app/actions/branches";
@@ -38,6 +39,54 @@ export default function InventoryPage() {
   const [manualImei, setManualImei] = useState("");
   const [selectedManualBranch, setSelectedManualBranch] = useState("");
   const [isMounted, setIsMounted] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        // Map data to expected format
+        const formatted = data.map(row => ({
+          name: row.Nama || row.name || row.Name,
+          sku: String(row.SKU || row.sku || "").toUpperCase(),
+          category: row.Kategori || row.category || row.Category || "Aksesori",
+          buyPrice: Number(row["Harga Beli"] || row["Harga_Beli"] || row.buyPrice || 0),
+          sellPrice: Number(row["Harga Jual"] || row["Harga_Jual"] || row.sellPrice || 0),
+          stockRuteng: Number(row["Stok Ruteng"] || row["Stok_Ruteng"] || row.stockRuteng || 0),
+          stockLarantuka: Number(row["Stok Larantuka"] || row["Stok_Larantuka"] || row.stockLarantuka || 0),
+          stockRiung: Number(row["Stok Riung"] || row["Stok_Riung"] || row.stockRiung || 0)
+        })).filter(p => p.name && p.sku);
+
+        if (formatted.length === 0) {
+          alert("Format file tidak sesuai atau data kosong. Pastikan kolom Nama dan SKU terisi.");
+          return;
+        }
+
+        const res = await bulkImportProducts(formatted);
+        if (res.success) {
+          alert(`Berhasil mengimpor ${res.successCount} produk! ${res.errorCount > 0 ? `(Gagal: ${res.errorCount})` : ""}`);
+          window.location.reload();
+        } else {
+          alert("Gagal impor: " + res.error);
+        }
+      } catch (err) {
+        alert("Error membaca file: " + err.message);
+      } finally {
+        setIsImporting(false);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
 
   // Load data
   useEffect(() => {
@@ -263,6 +312,21 @@ export default function InventoryPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <input 
+            type="file" 
+            id="excel-import" 
+            className="hidden" 
+            accept=".xlsx, .xls, .csv" 
+            onChange={handleImportExcel}
+          />
+          <label 
+            htmlFor="excel-import"
+            className={`px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all cursor-pointer ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+            {isImporting ? "Mengimpor..." : "Import Excel"}
+          </label>
+
           <button 
             onClick={() => exportToExcel(filtered.map(p => ({
               Nama: p.name,
