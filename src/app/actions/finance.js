@@ -87,7 +87,7 @@ export async function getKasbon() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("kasbon")
-    .select("*, profiles(full_name, role)")
+    .select("*, profiles:employee_id(full_name, role)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data || [];
@@ -98,7 +98,7 @@ export async function addKasbon(kasbonData) {
   const { error } = await supabase
     .from("kasbon")
     .insert({
-      profile_id: kasbonData.profile_id,
+      employee_id: kasbonData.profile_id,
       amount: Number(kasbonData.amount),
       remaining: Number(kasbonData.amount),
       installment_amount: Number(kasbonData.installment_amount),

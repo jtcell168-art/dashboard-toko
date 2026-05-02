@@ -53,10 +53,12 @@ export default function KasbonPage() {
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
-    if (!newKasbon.profile_id || !newKasbon.amount) return alert("Lengkapi data!");
+    const finalProfileId = isOwnerOrManager ? newKasbon.profile_id : currentUser.id;
+    if (!finalProfileId || !newKasbon.amount) return alert("Lengkapi data!");
+    
     setIsSubmitting(true);
     try {
-      await addKasbon(newKasbon);
+      await addKasbon({ ...newKasbon, profile_id: finalProfileId });
       alert("Pengajuan kasbon berhasil dikirim!");
       setShowAddModal(false);
       setNewKasbon({ profile_id: "", amount: "", installment_amount: "", reason: "" });
@@ -200,17 +202,23 @@ export default function KasbonPage() {
             <form onSubmit={handleAddSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Karyawan</label>
-                <select 
-                  className="input-field"
-                  value={newKasbon.profile_id}
-                  onChange={e => setNewKasbon({...newKasbon, profile_id: e.target.value})}
-                  required
-                >
-                  <option value="">-- Pilih Karyawan --</option>
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.role})</option>
-                  ))}
-                </select>
+                {isOwnerOrManager ? (
+                  <select 
+                    className="input-field"
+                    value={newKasbon.profile_id}
+                    onChange={e => setNewKasbon({...newKasbon, profile_id: e.target.value})}
+                    required
+                  >
+                    <option value="">-- Pilih Karyawan --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.role})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="input-field bg-white/5 opacity-70 flex items-center">
+                    {currentUser?.full_name}
+                  </div>
+                )}
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-white/40 uppercase font-bold">Nominal Kasbon (Rp)</label>

@@ -1,15 +1,16 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { formatRupiah } from "@/data/mockData";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from "recharts";
-import { useState, useEffect } from "react";
 import { getDashboardData } from "@/app/actions/dashboard";
-import { getEmployees, upsertSalary } from "@/app/actions/salaries";
+import { getEmployees } from "@/app/actions/salaries";
+import { sendNotification } from "@/app/actions/notifications";
 import { useBranch } from "@/context/BranchContext";
-import Link from "next/link";
 
 /* ============================
    KPI CARDS
@@ -63,6 +64,25 @@ function SalesChart({ sales7Days = [] }) {
             {p.name}: {formatRupiah(p.value)}
           </p>
         ))}
+        {/* Personal Kasbon (If any) */}
+        {data.kpi?.myKasbon > 0 && (
+          <div className="kpi-card rose relative overflow-hidden group">
+            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all duration-500" />
+            <div className="flex items-center justify-between relative z-10">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Sisa Kasbon Saya</p>
+                <p className="text-2xl font-bold text-white tabular-nums">{formatRupiah(data.kpi.myKasbon)}</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-rose-400">
+                <span className="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-white/20 mt-3 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">info</span>
+              Harap lalui cicilan tepat waktu
+            </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -213,6 +233,11 @@ export default function DashboardPage() {
   const [salaryForm, setSalaryForm] = useState({ profile_id: "", base_salary: "", bonus: "", notes: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Messaging state
+  const [showMsgModal, setShowMsgModal] = useState(false);
+  const [msgData, setMsgData] = useState({ userId: "", title: "", message: "", type: "info" });
+  const [isSending, setIsSending] = useState(false);
+
   // Date Filter State
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -267,12 +292,27 @@ export default function DashboardPage() {
     }
   };
 
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!msgData.userId || !msgData.message) return alert("Pilih penerima dan isi pesan!");
+    setIsSending(true);
+    try {
+      await sendNotification(msgData);
+      alert("Pesan berhasil terkirim!");
+      setShowMsgModal(false);
+      setMsgData({ userId: "", title: "", message: "", type: "info" });
+    } catch (err) {
+      alert("Gagal mengirim pesan: " + err.message);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   if (loading || !data || !branchIsMounted) {
     return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dashboard...</div>;
   }
 
-  const activeServices = data.kpi.activeServices || { pending: 0, process: 0, done: 0 };
-  const totalServices = (activeServices.pending || 0) + (activeServices.process || 0) + (activeServices.done || 0);
+  const totalServices = (data.kpi.activeServices?.pending || 0) + (data.kpi.activeServices?.process || 0) + (data.kpi.activeServices?.done || 0);
 
   return (
     <div className="flex flex-col gap-6 relative z-10" suppressHydrationWarning>
@@ -284,7 +324,17 @@ export default function DashboardPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {(data?.userRole === "owner" || data?.userRole === "manager") && (
+            <button 
+              onClick={() => setShowMsgModal(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all"
+            >
+              <span className="material-symbols-outlined text-[18px]">send</span>
+              Kirim Pesan
+            </button>
+          )}
+
           {/* Date Filter */}
           <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
             <div className="flex flex-col px-2 py-1">
@@ -451,6 +501,68 @@ export default function DashboardPage() {
         <RecentTransactions transactions={data.recentTransactions} />
         <ServiceAlerts serviceAlerts={data.serviceAlerts} />
       </div>
+
+      {/* Message Modal */}
+      {showMsgModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass-card w-full max-w-md p-6 animate-scale-in">
+            <h2 className="text-lg font-bold text-white mb-4">Kirim Pesan Internal</h2>
+            <form onSubmit={handleSendMessage} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Penerima</label>
+                <select 
+                  className="input-field"
+                  value={msgData.userId}
+                  onChange={e => setMsgData({...msgData, userId: e.target.value})}
+                  required
+                >
+                  <option value="">-- Pilih Admin/Teknisi --</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.role})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Judul Pesan</label>
+                <input 
+                  type="text"
+                  className="input-field"
+                  placeholder="Contoh: Pengumuman Rapat"
+                  value={msgData.title}
+                  onChange={e => setMsgData({...msgData, title: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Isi Pesan</label>
+                <textarea 
+                  className="input-field min-h-[100px]"
+                  placeholder="Tulis pesan Anda di sini..."
+                  value={msgData.message}
+                  onChange={e => setMsgData({...msgData, message: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="flex gap-3 mt-2">
+                <button 
+                  type="button"
+                  onClick={() => setShowMsgModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 text-white text-sm font-semibold hover:bg-white/10 transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSending}
+                  className="flex-1 btn-gradient py-2.5 text-sm font-semibold"
+                >
+                  {isSending ? "Mengirim..." : "Kirim Sekarang"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

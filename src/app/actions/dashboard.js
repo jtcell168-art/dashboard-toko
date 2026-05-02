@@ -203,6 +203,15 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       color: ["#6366F1", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"][i % 5]
     }));
 
+    // 11. My Personal Kasbon (for any role)
+    const { data: myKasbonData } = await supabase
+      .from("kasbon")
+      .select("remaining")
+      .eq("employee_id", authUser.id)
+      .eq("status", "active");
+    
+    const myKasbonBalance = myKasbonData?.reduce((sum, k) => sum + Number(k.remaining), 0) || 0;
+
     return {
       kpi: {
         revenue: totalRevenue,
@@ -211,6 +220,7 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
         activeServices,
         totalSalary: totalSalary,
         inventoryValue: inventoryValue,
+        myKasbon: myKasbonBalance
       },
       recentTransactions: recentTransactions || [],
       sales7Days,
