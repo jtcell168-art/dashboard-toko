@@ -254,13 +254,13 @@ export async function processDigitalTransaction(data) {
     .insert({
       invoice_no: `DIG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: "digital",
-      customer_name: phoneNumber, // Use phone as customer name if not provided
+      customer_name: phoneNumber, 
       customer_phone: phoneNumber,
-      branch_id: branchId === "all" ? null : branchId,
+      branch_id: user.role === 'owner' ? (branchId === "all" ? null : branchId) : user.branch_id,
       cashier_id: user.id,
       subtotal: Number(sellingPrice),
       total: Number(sellingPrice),
-      payment_method: "cash", // Default to cash for digital
+      payment_method: "cash", 
       status: "completed",
       notes: `${tab.toUpperCase()} - ${provider} - ${note}`
     })

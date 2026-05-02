@@ -170,7 +170,12 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
     // 10. Revenue by Branch (only relevant if 'all' branches or if owner wants comparison)
     const branchRevenueQuery = supabase
       .from("transactions")
-      .select("total, branch_id, branches(name)")
+      .select(`
+        total, 
+        branch_id, 
+        branches(name),
+        profiles:cashier_id(branch_id, branches(name))
+      `)
       .eq("status", "completed")
       .gte("created_at", startDate || new Date().toISOString().split("T")[0]);
     
@@ -180,11 +185,17 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
     const branchMap = {};
     (branchRevenueData || []).forEach(t => {
       let bName = t.branches?.name;
+      
+      // Fallback 1: Jika branch_id di transaksi NULL, cek branch_id di profil Kasir
+      if (!bName && t.profiles?.branches?.name) {
+        bName = t.profiles.branches.name;
+      }
+      
+      // Fallback 2: Mock data IDs
       if (!bName) {
-        // Fallback for mock data IDs if they exist in DB
-        if (t.branch_id === "c") bName = "JT CELL RIUNG";
-        else if (t.branch_id === "b") bName = "JT CELL LARANTUKA";
-        else if (t.branch_id === "a") bName = "JT CELL RUTENG";
+        if (t.branch_id === "c" || t.profiles?.branch_id === "c") bName = "JT CELL RIUNG";
+        else if (t.branch_id === "b" || t.profiles?.branch_id === "b") bName = "JT CELL LARANTUKA";
+        else if (t.branch_id === "a" || t.profiles?.branch_id === "a") bName = "JT CELL RUTENG";
         else bName = "Tanpa Cabang";
       }
       branchMap[bName] = (branchMap[bName] || 0) + Number(t.total);
