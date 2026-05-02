@@ -86,7 +86,7 @@ const MENU = [
   },
 ];
 
-export default function Sidebar({ collapsed, onToggle, user }) {
+export default function Sidebar({ collapsed, onToggle, user, isMobile = false }) {
   const pathname = usePathname();
   const [expandedMenus, setExpandedMenus] = useState({});
   const [mounted, setMounted] = useState(false);
@@ -98,42 +98,30 @@ export default function Sidebar({ collapsed, onToggle, user }) {
   const role = user?.role || "kasir";
 
   const filteredMenu = useMemo(() => {
+    // ... same as before
     return MENU.map(item => {
-      // 1. Teknikal Role Restriction
       if (role === "teknisi") {
         if (item.label === "Dashboard") return item;
         if (item.label === "Point of Sale") {
-          return {
-            ...item,
-            children: item.children.filter(c => c.label === "Servis HP")
-          };
+          return { ...item, children: item.children.filter(c => c.label === "Servis HP") };
         }
         return null;
       }
-
-      // 2. Kasir Role Restriction
       if (role === "kasir") {
         if (item.label === "Pengaturan") return null;
         if (item.label === "Purchase Order") return null;
         if (item.label === "Keuangan") {
-          return {
-            ...item,
-            children: item.children.filter(c => ["Kasbon Karyawan", "Cicilan"].includes(c.label))
-          };
+          return { ...item, children: item.children.filter(c => ["Kasbon Karyawan", "Cicilan"].includes(c.label)) };
         }
         if (item.label === "Laporan") {
-          return {
-            ...item,
-            children: item.children.filter(c => ["Produktivitas Servis", "Laporan Kasbon", "Laporan Cicilan"].includes(c.label))
-          };
+          return { ...item, children: item.children.filter(c => ["Produktivitas Servis", "Laporan Kasbon", "Laporan Cicilan"].includes(c.label)) };
         }
       }
-
       return item;
     }).filter(Boolean);
   }, [role]);
 
-  // Auto-expand active parent menus on first render
+  // ... same as before
   useEffect(() => {
     const initialExpanded = {};
     filteredMenu.forEach((item) => {
@@ -145,10 +133,7 @@ export default function Sidebar({ collapsed, onToggle, user }) {
   }, [pathname, filteredMenu]);
 
   const toggleMenu = (label) => {
-    setExpandedMenus((prev) => ({
-      ...prev,
-      [label]: !prev[label],
-    }));
+    setExpandedMenus((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
   const isActive = (href) => {
@@ -163,9 +148,9 @@ export default function Sidebar({ collapsed, onToggle, user }) {
 
   return (
     <div
-      className="fixed top-0 left-0 h-dvh z-40 hidden md:flex flex-col overflow-hidden"
+      className={`fixed top-0 left-0 h-dvh z-40 ${isMobile ? 'flex w-[280px]' : 'hidden md:flex'} flex-col overflow-hidden shadow-2xl md:shadow-none`}
       style={{
-        width: collapsed ? 72 : 256,
+        width: isMobile ? 280 : (collapsed ? 72 : 256),
         background: "#111827",
         borderRight: "1px solid rgba(255,255,255,0.04)",
         transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",

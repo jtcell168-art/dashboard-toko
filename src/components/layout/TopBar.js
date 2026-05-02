@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { logout } from "@/app/actions/auth";
 
 export default function TopBar({ sidebarWidth = 256, onMobileMenuToggle }) {
   return (
@@ -28,11 +28,20 @@ export default function TopBar({ sidebarWidth = 256, onMobileMenuToggle }) {
         </Link>
       </div>
 
-      {/* Notification */}
-      <button className="shrink-0 text-white/60 hover:bg-white/5 transition-colors active:scale-95 duration-150 p-2 rounded-full flex items-center justify-center relative">
-        <span className="material-symbols-outlined text-[24px]">notifications</span>
-        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-      </button>
+      {/* Actions */}
+      <div className="flex items-center gap-1">
+        <button className="shrink-0 text-white/60 hover:bg-white/5 transition-colors active:scale-95 duration-150 p-2 rounded-full flex items-center justify-center relative">
+          <span className="material-symbols-outlined text-[22px]">notifications</span>
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
+        </button>
+        <button 
+          onClick={() => logout()}
+          className="shrink-0 text-rose-400/80 hover:bg-rose-500/10 transition-colors active:scale-95 duration-150 p-2 rounded-full flex items-center justify-center"
+          title="Logout"
+        >
+          <span className="material-symbols-outlined text-[22px]">logout</span>
+        </button>
+      </div>
     </nav>
   );
 }

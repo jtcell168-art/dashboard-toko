@@ -30,8 +30,8 @@ export default function MainLayout({ children, user }) {
               className="fixed inset-0 bg-black/60 z-[45] animate-fade-in"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <div className="fixed top-0 left-0 h-dvh w-[280px] z-[50] animate-slide-in-right">
-              <Sidebar collapsed={false} onToggle={() => setMobileMenuOpen(false)} user={user} />
+            <div className="fixed top-0 left-0 h-dvh w-[280px] z-[50] animate-slide-in-left">
+              <Sidebar collapsed={false} onToggle={() => setMobileMenuOpen(false)} user={user} isMobile={true} />
             </div>
           </div>
         )}
