@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { createClient } from "@/lib/supabase/client";
+import { getPnlData } from "@/app/actions/finance";
 
 const CustomTooltip = ({ active, payload, label }) => { if (!active || !payload) return null; return (<div className="bg-[#1E293B] border border-white/10 rounded-lg p-3 shadow-xl text-xs"><p className="font-semibold text-white mb-1">{label}</p>{payload.map((p, i) => (<p key={i} style={{ color: p.color }} className="tabular-nums">{p.name}: {formatRupiah(p.value)}</p>))}</div>); };
 
@@ -12,9 +12,9 @@ export default function PnLReportPage() {
 
   useEffect(() => {
     async function load() {
-      // Dummy logic for now until full aggregations are ready
-      // This wipes out the mock data as requested.
-      setData([]);
+      setIsLoading(true);
+      const res = await getPnlData();
+      setData(res);
       setIsLoading(false);
     }
     load();
