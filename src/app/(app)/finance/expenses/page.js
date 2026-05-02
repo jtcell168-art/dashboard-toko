@@ -1,4 +1,6 @@
 "use client";
+
+export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/app/actions/finance";

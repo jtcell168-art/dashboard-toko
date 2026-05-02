@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { getKasbon, addKasbon, approveKasbon, payKasbon } from "@/app/actions/finance";

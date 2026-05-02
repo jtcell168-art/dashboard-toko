@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 
 export default function TopBar({ sidebarWidth = 256, onMobileMenuToggle }) {
