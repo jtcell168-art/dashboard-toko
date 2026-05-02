@@ -7,12 +7,14 @@ import { fixNokiaStock, migrateImeiStatus } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
 import { getBranches } from "@/app/actions/branches";
 import { exportToExcel } from "@/lib/utils/export";
+import { useBranch } from "@/context/BranchContext";
 import IMEIScanner from "@/components/inventory/IMEIScanner";
 
 const CATEGORIES = ["Semua", "HP", "Aksesori", "Sparepart"];
 const ADD_CATEGORIES = ["HP", "Aksesori", "Sparepart"];
 
 export default function InventoryPage() {
+  const { selectedBranch, isMounted: branchIsMounted } = useBranch();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Semua");
   const [sortBy, setSortBy] = useState("name");
@@ -31,7 +33,7 @@ export default function InventoryPage() {
   const [isUpdatingPrice, setIsUpdatingPrice] = useState(false);
   const [branches, setBranches] = useState([]);
   const [imeiList, setImeiList] = useState([]); // [{ imei, branchId }]
-  const [scanningBranch, setScanningBranch] = useState(null); // ID cabang yang sedang discan
+  const [scanningBranch, setScanningBranch] = useState(null); 
   const [showScanner, setShowScanner] = useState(false);
   const [manualImei, setManualImei] = useState("");
   const [selectedManualBranch, setSelectedManualBranch] = useState("");
@@ -40,29 +42,25 @@ export default function InventoryPage() {
   // Load data
   useEffect(() => {
     setIsMounted(true);
+    if (!branchIsMounted) return;
+
     async function loadData() {
       setIsLoading(true);
       const user = await getCurrentUser();
       setCurrentUser(user);
       
       const [data, branchList] = await Promise.all([
-        getInventory(user?.branch_id || "all"),
+        getInventory(selectedBranch),
         getBranches()
       ]);
       setBranches(branchList);
 
       const mapped = data.map(p => {
-        // Map stock based on branch names/IDs dynamically
         const stocks = {};
         branchList.forEach(b => {
           const s = p.stock.find(st => st.branch_id === b.id);
           stocks[b.id] = s ? s.quantity : 0;
         });
-
-        // Helper for summary and sorting (A=Ruteng, B=Larantuka, C=Riung for legacy compatibility if needed)
-        const rutengId = branchList.find(b => b.name.toLowerCase().includes("ruteng"))?.id;
-        const laraId = branchList.find(b => b.name.toLowerCase().includes("larantuka"))?.id;
-        const riungId = branchList.find(b => b.name.toLowerCase().includes("riung"))?.id;
 
         return {
           id: p.id,
@@ -71,10 +69,7 @@ export default function InventoryPage() {
           category: p.category,
           buyPrice: p.purchase_price,
           sellPrice: p.retail_price,
-          stockA: rutengId ? stocks[rutengId] : 0,
-          stockB: laraId ? stocks[laraId] : 0,
-          stockC: riungId ? stocks[riungId] : 0,
-          stocks, // Full map for dynamic rendering
+          stocks,
           originalStock: p.stock
         };
       });
@@ -82,7 +77,7 @@ export default function InventoryPage() {
       setIsLoading(false);
     }
     loadData();
-  }, []);
+  }, [selectedBranch, branchIsMounted]);
 
   const hasAccess = currentUser?.role === "owner" || currentUser?.role === "manager";
   const canSeeBuyPrice = currentUser?.role === "owner" || currentUser?.role === "manager";
@@ -99,175 +94,137 @@ export default function InventoryPage() {
       items = items.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q)
+          p.sku.toLowerCase().includes(q) ||
+          (p.originalStock && p.originalStock.some(s => s.imei_records && s.imei_records.some(i => i.imei.toLowerCase().includes(q))))
       );
     }
 
-    if (sortBy === "name") items.sort((a, b) => a.name.localeCompare(b.name));
-    if (sortBy === "stock-low") items.sort((a, b) => (a.stockA + a.stockB + a.stockC) - (b.stockA + b.stockB + b.stockC));
-    if (sortBy === "stock-high") items.sort((a, b) => (b.stockA + b.stockB + b.stockC) - (a.stockA + a.stockB + a.stockC));
-
-    return items;
-  }, [search, category, sortBy, dbProducts]);
-
-  const totalItems = dbProducts.reduce((sum, p) => sum + p.stockA + p.stockB + p.stockC, 0);
-  const lowStockItems = dbProducts.filter((p) => (p.stockA + p.stockB + p.stockC) < 5);
-
-  const handleAddProduct = async () => {
-    if (!addForm.name || !addForm.sku) return alert("Nama dan SKU wajib diisi!");
-    
-    // Validate IMEIs if category is HP
-    if (addForm.category === "HP") {
-      const totalStock = Number(addForm.stockA) + Number(addForm.stockB) + Number(addForm.stockC);
-      if (imeiList.length < totalStock) {
-        return alert(`Mohon lengkapi IMEI. Total stok adalah ${totalStock} unit, baru ${imeiList.length} IMEI yang diinput.`);
-      }
+    if (sortBy === "stock-low") {
+      items.sort((a, b) => {
+        const totalA = Object.values(a.stocks).reduce((sum, s) => sum + s, 0);
+        const totalB = Object.values(b.stocks).reduce((sum, s) => sum + s, 0);
+        return totalA - totalB;
+      });
+    } else if (sortBy === "stock-high") {
+      items.sort((a, b) => {
+        const totalA = Object.values(a.stocks).reduce((sum, s) => sum + s, 0);
+        const totalB = Object.values(b.stocks).reduce((sum, s) => sum + s, 0);
+        return totalB - totalA;
+      });
+    } else {
+      items.sort((a, b) => a.name.localeCompare(b.name));
     }
 
+    return items;
+  }, [dbProducts, category, search, sortBy]);
+
+  const lowStockItems = dbProducts.filter((p) => {
+    const total = Object.values(p.stocks).reduce((sum, s) => sum + s, 0);
+    return total < 5;
+  });
+
+  const handleAddProduct = async () => {
     try {
-      const stockMap = {};
-      const ruteng = branches.find(b => b.name.includes("Ruteng"));
-      const lara = branches.find(b => b.name.includes("Larantuka"));
-      const riung = branches.find(b => b.name.includes("Riung"));
-      
-      if (ruteng) stockMap[ruteng.id] = Number(addForm.stockA);
-      if (lara) stockMap[lara.id] = Number(addForm.stockB);
-      if (riung) stockMap[riung.id] = Number(addForm.stockC);
+      const stockData = {};
+      branches.forEach(b => {
+        if (b.name.toLowerCase().includes("ruteng")) stockData[b.id] = Number(addForm.stockA);
+        else if (b.name.toLowerCase().includes("larantuka")) stockData[b.id] = Number(addForm.stockB);
+        else if (b.name.toLowerCase().includes("riung")) stockData[b.id] = Number(addForm.stockC);
+        else stockData[b.id] = 0;
+      });
 
-      const res = await addProduct({
-        name: addForm.name, sku: addForm.sku, category: addForm.category,
-        retailPrice: Number(addForm.sellPrice), purchasePrice: Number(addForm.buyPrice),
-        isService: false, isDigital: false
-      }, stockMap, imeiList);
-
-      if (res.error) {
-        return alert(res.error);
-      }
-
-      alert(`Produk berhasil ditambahkan!`);
+      await addProduct({
+        ...addForm,
+        purchase_price: Number(addForm.buyPrice),
+        retail_price: Number(addForm.sellPrice),
+        stock: stockData,
+        imeis: imeiList
+      });
+      alert("Produk berhasil ditambah!");
       setShowAddForm(false);
       setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0" });
       setImeiList([]);
-      window.location.reload(); 
-    } catch (err) { alert("Terjadi kesalahan sistem: " + err.message); }
-  };
-
-  const handleAddImei = (imeiString, branchId) => {
-    if (!imeiString || !branchId) return;
-    
-    // Split by newline, comma, or space and clean up
-    const newImeis = imeiString
-      .split(/[\n, ]+/)
-      .map(i => i.trim())
-      .filter(i => i.length > 0);
-
-    if (newImeis.length === 0) return;
-
-    const currentImeis = [...imeiList];
-    let addedCount = 0;
-    let skippedCount = 0;
-
-    newImeis.forEach(imei => {
-      if (currentImeis.some(i => i.imei === imei)) {
-        skippedCount++;
-      } else {
-        currentImeis.push({ imei, branchId });
-        addedCount++;
-      }
-    });
-
-    setImeiList(currentImeis);
-
-    // Auto-update stock count in addForm for that branch
-    const branch = branches.find(b => b.id === branchId);
-    if (branch) {
-      const branchName = branch.name.toLowerCase();
-      const countInBranch = currentImeis.filter(i => i.branchId === branchId).length;
-      
-      if (branchName.includes("ruteng")) setAddForm(prev => ({ ...prev, stockA: String(countInBranch) }));
-      else if (branchName.includes("larantuka")) setAddForm(prev => ({ ...prev, stockB: String(countInBranch) }));
-      else if (branchName.includes("riung")) setAddForm(prev => ({ ...prev, stockC: String(countInBranch) }));
-    }
-
-    if (skippedCount > 0) {
-      alert(`${addedCount} IMEI berhasil ditambahkan, ${skippedCount} IMEI dilewati karena sudah ada.`);
+      // Refresh
+      window.location.reload();
+    } catch (err) {
+      alert("Gagal tambah produk: " + err.message);
     }
   };
 
-  const removeImei = (imei) => {
-    const updated = imeiList.filter(i => i.imei !== imei);
-    setImeiList(updated);
-    
-    // Update stock counts after removal
-    const stocks = { stockA: 0, stockB: 0, stockC: 0 };
-    updated.forEach(item => {
-      const b = branches.find(br => br.id === item.branchId);
-      if (b?.name.toLowerCase().includes("ruteng")) stocks.stockA++;
-      else if (b?.name.toLowerCase().includes("larantuka")) stocks.stockB++;
-      else if (b?.name.toLowerCase().includes("riung")) stocks.stockC++;
-    });
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    const rutengId = branches.find(b => b.name.toLowerCase().includes("ruteng"))?.id;
+    const laraId = branches.find(b => b.name.toLowerCase().includes("larantuka"))?.id;
+    const riungId = branches.find(b => b.name.toLowerCase().includes("riung"))?.id;
 
-    setAddForm(prev => ({ 
-      ...prev, 
-      stockA: String(stocks.stockA), 
-      stockB: String(stocks.stockB), 
-      stockC: String(stocks.stockC) 
-    }));
+    setEditForm({
+      ...p,
+      stockA: rutengId ? p.stocks[rutengId] : 0,
+      stockB: laraId ? p.stocks[laraId] : 0,
+      stockC: riungId ? p.stocks[riungId] : 0
+    });
   };
 
-  const startEdit = (product) => {
-    setEditingId(product.id);
-    setEditForm({ name: product.name, sku: product.sku, category: product.category, buyPrice: String(product.buyPrice), sellPrice: String(product.sellPrice), stockA: String(product.stockA), stockB: String(product.stockB), stockC: String(product.stockC) });
-    setShowAddForm(false);
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm(null);
   };
 
   const handleSaveEdit = async () => {
-    if (!editForm.name || !editForm.sku) return alert("Nama dan SKU wajib diisi!");
     try {
-      const res = await updateProduct(editingId, {
-        name: editForm.name, sku: editForm.sku, category: editForm.category,
-        retailPrice: Number(editForm.sellPrice), purchasePrice: Number(editForm.buyPrice)
+      const stockData = {};
+      branches.forEach(b => {
+        if (b.name.toLowerCase().includes("ruteng")) stockData[b.id] = Number(editForm.stockA);
+        else if (b.name.toLowerCase().includes("larantuka")) stockData[b.id] = Number(editForm.stockB);
+        else if (b.name.toLowerCase().includes("riung")) stockData[b.id] = Number(editForm.stockC);
       });
-      if (res.error) {
-        return alert(res.error);
-      }
-      alert(`Produk berhasil diupdate!`);
-      setEditingId(null);
-      setEditForm(null);
-      window.location.reload();
-    } catch (err) { alert("Terjadi kesalahan sistem: " + err.message); }
-  };
 
-  const handleDelete = async (id) => {
-    if (confirm("Yakin ingin menghapus produk ini?")) {
-      try {
-        await deleteProduct(id);
-        setDbProducts(dbProducts.filter(p => p.id !== id));
-      } catch (err) { alert(err.message); }
+      await updateProduct(editingId, {
+        name: editForm.name,
+        sku: editForm.sku,
+        category: editForm.category,
+        purchase_price: Number(editForm.buyPrice),
+        retail_price: Number(editForm.sellPrice),
+        stock: stockData
+      });
+      alert("Produk berhasil diupdate!");
+      setEditingId(null);
+      // Refresh
+      window.location.reload();
+    } catch (err) {
+      alert("Gagal update produk: " + err.message);
     }
   };
 
-  const cancelEdit = () => { setEditingId(null); setEditForm(null); };
-
-  const handleOpenPriceModal = (product) => {
-    setPriceHistoryProduct(product);
-    setPriceForm({ buyPrice: String(product.buyPrice), sellPrice: String(product.sellPrice), reason: "" });
-    setShowPriceModal(true);
-    // Load history
-    loadPriceHistory(product.id);
+  const handleDelete = async (id) => {
+    if (!confirm("Yakin ingin hapus produk ini?")) return;
+    try {
+      await deleteProduct(id);
+      alert("Produk dihapus!");
+      window.location.reload();
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
-  const loadPriceHistory = async (id) => {
-    const history = await getPriceHistory(id);
+  const handleOpenPriceModal = async (p) => {
+    setPriceHistoryProduct(p);
+    setPriceForm({ buyPrice: p.buyPrice, sellPrice: p.sellPrice, reason: "" });
+    setShowPriceModal(true);
+    const history = await getPriceHistory(p.id);
     setPriceHistory(history);
   };
 
   const handleUpdatePrice = async () => {
-    if (!priceForm.buyPrice || !priceForm.sellPrice) return alert("Harga beli dan jual wajib diisi!");
+    if (!priceForm.reason) return alert("Alasan perubahan harga wajib diisi!");
     setIsUpdatingPrice(true);
     try {
-      await updateProductPrice(priceHistoryProduct.id, Number(priceForm.buyPrice), Number(priceForm.sellPrice), priceForm.reason);
-      alert("Harga berhasil diperbarui!");
+      await updateProductPrice(priceHistoryProduct.id, {
+        purchase_price: Number(priceForm.buyPrice),
+        retail_price: Number(priceForm.sellPrice),
+        reason: priceForm.reason
+      });
+      alert("Harga berhasil diupdate!");
       setShowPriceModal(false);
       window.location.reload();
     } catch (err) {
@@ -277,175 +234,174 @@ export default function InventoryPage() {
     }
   };
 
+  const handleAddImei = (imei, branchId) => {
+    if (imeiList.find(i => i.imei === imei)) return alert("IMEI sudah ada di list!");
+    setImeiList([...imeiList, { imei, branchId }]);
+    setShowScanner(false);
+  };
+
+  const removeImei = (imei) => {
+    setImeiList(imeiList.filter(i => i.imei !== imei));
+  };
+
+  if (!isMounted || !branchIsMounted) return null;
+
   return (
-    <div className="flex flex-col gap-5 stagger-children">
+    <div className="flex flex-col gap-6 stagger-children">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-white">Inventaris</h1>
-          <p className="text-sm text-white/40 mt-0.5">Stok semua cabang — {dbProducts.length} produk</p>
+          <p className="text-sm text-white/40 mt-1">Manajemen stok produk — {selectedBranch === 'all' ? 'Semua Cabang' : branches.find(b => b.id === selectedBranch)?.name}</p>
         </div>
-        {hasAccess && (
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => {
-                const dataToExport = filtered.map(p => ({
-                  Nama: p.name,
-                  SKU: p.sku,
-                  Kategori: p.category,
-                  "Harga Beli": p.buyPrice,
-                  "Harga Jual": p.sellPrice,
-                  "Stok Ruteng": p.stockA,
-                  "Stok Larantuka": p.stockB,
-                  "Stok Riung": p.stockC,
-                  "Total Stok": p.stockA + p.stockB + p.stockC
-                }));
-                exportToExcel(dataToExport, "Inventaris_JT_Cell");
-              }}
-              className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => exportToExcel(filtered.map(p => ({
+              Nama: p.name,
+              SKU: p.sku,
+              Kategori: p.category,
+              "Harga Beli": p.buyPrice,
+              "Harga Jual": p.sellPrice,
+              Total: Object.values(p.stocks).reduce((a,b) => a+b, 0)
+            })), "Data_Inventaris")}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            Export Excel
+          </button>
+          
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm font-semibold flex items-center gap-2 hover:bg-amber-500/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">sync</span>
+            Sinkronkan Stok
+          </button>
+
+          {hasAccess && (
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="btn-gradient px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2"
             >
-              <span className="material-symbols-outlined text-[18px]">download</span>
-              <span className="hidden sm:inline">Export Excel</span>
+              <span className="material-symbols-outlined text-[20px]">add</span>
+              Tambah Produk
             </button>
-            <button 
-              onClick={async () => {
-                await migrateImeiStatus();
-                const res = await fixNokiaStock(currentUser?.branch_id || "all");
-                alert(res);
-                window.location.reload();
-              }}
-              className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm font-semibold flex items-center gap-2 hover:bg-amber-500/20 transition-all"
-            >
-              <span className="material-symbols-outlined text-[18px]">sync</span>
-              <span className="hidden sm:inline">Sinkronkan Stok</span>
-            </button>
-            <button onClick={() => setShowAddForm(!showAddForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px]">{showAddForm ? "close" : "add"}</span>
-              <span className="hidden sm:inline">{showAddForm ? "Batal" : "Tambah Produk"}</span>
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Add Product Form */}
       {showAddForm && (
-        <div className="glass-card p-5 flex flex-col gap-4 animate-fade-slide-up">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[20px] text-indigo-400">inventory_2</span>
-            <h3 className="text-sm font-semibold text-white">Tambah Produk Baru</h3>
+        <div className="glass-card p-6 border-indigo-500/30 animate-fade-slide-up">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-400">add_box</span>
+              <h3 className="text-base font-bold text-white">Tambah Produk Baru</h3>
+            </div>
+            <button onClick={() => setShowAddForm(false)} className="text-white/30 hover:text-white"><span className="material-symbols-outlined">close</span></button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white/40">Nama Produk *</label>
-              <input className="input-field" placeholder="e.g. iPhone 16 128GB" value={addForm.name} onChange={e => setAddForm({...addForm, name: e.target.value})} />
+              <label className="text-[10px] text-white/40 uppercase font-bold">Nama Produk</label>
+              <input className="input-field" placeholder="e.g. Nokia 105 Dual SIM" value={addForm.name} onChange={e => setAddForm({...addForm, name: e.target.value})} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white/40">SKU *</label>
-              <input className="input-field uppercase font-mono" placeholder="e.g. APL-IP16-128" value={addForm.sku} onChange={e => setAddForm({...addForm, sku: e.target.value.toUpperCase()})} />
+              <label className="text-[10px] text-white/40 uppercase font-bold">SKU / Kode</label>
+              <input className="input-field font-mono uppercase" placeholder="NOK-105-DS" value={addForm.sku} onChange={e => setAddForm({...addForm, sku: e.target.value.toUpperCase()})} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white/40">Kategori</label>
+              <label className="text-[10px] text-white/40 uppercase font-bold">Kategori</label>
               <select className="input-field" value={addForm.category} onChange={e => setAddForm({...addForm, category: e.target.value})}>
                 {ADD_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            {canSeeBuyPrice && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-white/40">Harga Beli</label>
-                <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-white/20">Rp</span><input className="input-field pl-10 text-right tabular-nums" type="number" placeholder="0" value={addForm.buyPrice} onChange={e => setAddForm({...addForm, buyPrice: e.target.value})} /></div>
-              </div>
-            )}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white/40">Harga Jual</label>
-              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-white/20">Rp</span><input className="input-field pl-10 text-right tabular-nums" type="number" placeholder="0" value={addForm.sellPrice} onChange={e => setAddForm({...addForm, sellPrice: e.target.value})} /></div>
+              <label className="text-[10px] text-white/40 uppercase font-bold">Harga Beli (Rp)</label>
+              <input type="number" className="input-field" placeholder="0" value={addForm.buyPrice} onChange={e => setAddForm({...addForm, buyPrice: e.target.value})} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white/40">Stok Awal per Cabang</label>
-              <div className="flex gap-2">
-                <div className="flex-1"><input className="input-field text-center text-sm" type="number" min="0" placeholder="A" value={addForm.stockA} onChange={e => setAddForm({...addForm, stockA: e.target.value})} /><p className="text-[9px] text-white/20 text-center mt-0.5">Ruteng</p></div>
-                <div className="flex-1"><input className="input-field text-center text-sm" type="number" min="0" placeholder="B" value={addForm.stockB} onChange={e => setAddForm({...addForm, stockB: e.target.value})} /><p className="text-[9px] text-white/20 text-center mt-0.5">Larantuka</p></div>
-                <div className="flex-1"><input className="input-field text-center text-sm" type="number" min="0" placeholder="C" value={addForm.stockC} onChange={e => setAddForm({...addForm, stockC: e.target.value})} /><p className="text-[9px] text-white/20 text-center mt-0.5">Riung</p></div>
+              <label className="text-[10px] text-white/40 uppercase font-bold">Harga Jual (Rp)</label>
+              <input type="number" className="input-field font-bold text-indigo-400" placeholder="0" value={addForm.sellPrice} onChange={e => setAddForm({...addForm, sellPrice: e.target.value})} />
+            </div>
+          </div>
+
+          {/* Initial Stock */}
+          <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
+            <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+              Stok Awal per Cabang
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/30 uppercase">Ruteng (Pusat)</label>
+                <input type="number" className="input-field text-center" value={addForm.stockA} onChange={e => setAddForm({...addForm, stockA: e.target.value})} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/30 uppercase">Larantuka</label>
+                <input type="number" className="input-field text-center" value={addForm.stockB} onChange={e => setAddForm({...addForm, stockB: e.target.value})} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/30 uppercase">Riung</label>
+                <input type="number" className="input-field text-center" value={addForm.stockC} onChange={e => setAddForm({...addForm, stockC: e.target.value})} />
               </div>
             </div>
           </div>
-          {canSeeBuyPrice && addForm.buyPrice && addForm.sellPrice && Number(addForm.sellPrice) > Number(addForm.buyPrice) && (
-            <div className="flex items-center gap-2 bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-3">
-              <span className="material-symbols-outlined text-emerald-400 text-[16px]">trending_up</span>
-              <p className="text-xs text-emerald-300/80 font-medium">Margin: {formatRupiah(Number(addForm.sellPrice) - Number(addForm.buyPrice))} ({((Number(addForm.sellPrice) - Number(addForm.buyPrice)) / Number(addForm.buyPrice) * 100).toFixed(1)}%)</p>
-            </div>
-          )}
-          {/* IMEI Section for HP */}
+
+          {/* IMEI Management (for HP) */}
           {addForm.category === "HP" && (
-            <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
-                  Input IMEI 1
+            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">barcode_scanner</span>
+                  Input IMEI (Wajib untuk HP)
                 </h4>
-                <div className="text-[10px] text-white/40">
-                  Total: <span className="text-white font-bold">{imeiList.length}</span> / {Number(addForm.stockA) + Number(addForm.stockB) + Number(addForm.stockC)} unit
+                <div className="flex items-center gap-2">
+                   <select 
+                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white"
+                    value={selectedManualBranch}
+                    onChange={e => setSelectedManualBranch(e.target.value)}
+                  >
+                    <option value="">-- Pilih Cabang --</option>
+                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <button 
+                    onClick={() => {
+                      if(!selectedManualBranch) return alert("Pilih cabang dulu!");
+                      setScanningBranch(selectedManualBranch);
+                      setShowScanner(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-lg text-[10px] font-bold border border-indigo-500/20 hover:bg-indigo-500/20"
+                  >
+                    <span className="material-symbols-outlined text-sm">photo_camera</span>
+                    Scan
+                  </button>
                 </div>
               </div>
-              
-              <div className="flex flex-col gap-4">
-                {/* Branch Select for Scan */}
+
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-2">
+                  <input 
+                    className="input-field flex-1 text-sm font-mono" 
+                    placeholder="Ketik IMEI manual..." 
+                    value={manualImei}
+                    onChange={e => setManualImei(e.target.value)}
+                  />
+                  <button 
+                    onClick={() => {
+                      if(!manualImei || !selectedManualBranch) return alert("Isi IMEI dan pilih cabang!");
+                      handleAddImei(manualImei, selectedManualBranch);
+                      setManualImei("");
+                    }}
+                    className="px-4 bg-white/5 border border-white/10 text-white rounded-xl text-xs font-bold"
+                  >
+                    Tambah
+                  </button>
+                </div>
+
                 <div className="flex flex-wrap gap-2">
-                  {branches.map(branch => (
-                    <button 
-                      key={branch.id}
-                      onClick={() => { setScanningBranch(branch.id); setShowScanner(true); }}
-                      className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all flex items-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-sm">photo_camera</span>
-                      Scan untuk {branch.name.split(' ')[2] || branch.name}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Manual Input Opsi */}
-                <div className="flex flex-col gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <label className="text-[10px] text-white/40 uppercase font-bold">Input Manual / Paste IMEI (Bisa Banyak)</label>
-                    <textarea 
-                      className="input-field py-2 text-sm min-h-[80px] font-mono" 
-                      placeholder="Masukkan IMEI... &#10;Bisa banyak sekaligus (Pisahkan dengan Enter atau Koma)" 
-                      value={manualImei} 
-                      onChange={e => setManualImei(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2 items-center">
-                    <div className="w-full sm:w-60 flex flex-col gap-1.5">
-                      <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Cabang untuk IMEI ini</label>
-                      <select 
-                        className="input-field py-2 text-xs" 
-                        value={selectedManualBranch} 
-                        onChange={e => setSelectedManualBranch(e.target.value)}
-                      >
-                        <option value="">Pilih Cabang</option>
-                        {branches.map(b => (
-                          <option key={b.id} value={b.id}>{b.name.split(' ')[2] || b.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        if (!manualImei || !selectedManualBranch) return alert("Pilih cabang dan isi IMEI!");
-                        handleAddImei(manualImei, selectedManualBranch);
-                        setManualImei("");
-                      }}
-                      className="btn-gradient px-6 py-2 text-sm h-[38px] w-full sm:w-auto mt-auto"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px]">add_task</span>
-                        Tambah Massal
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* IMEI List Display */}
-                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar p-1">
-                  {imeiList.map(item => (
+                  {imeiList.map((item) => (
                     <div key={item.imei} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 group">
                       <div className="flex flex-col">
                         <span className="text-[10px] font-mono text-white">{item.imei}</span>
@@ -474,8 +430,8 @@ export default function InventoryPage() {
       )}
 
       {/* Search & Filter */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex-1 relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[20px] text-white/30">
             search
           </span>
@@ -487,16 +443,19 @@ export default function InventoryPage() {
             suppressHydrationWarning
           />
         </div>
-        <select
-          className="input-field w-auto min-w-[140px] appearance-none"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          suppressHydrationWarning
-        >
-          <option value="name">Urutkan: Nama</option>
-          <option value="stock-low">Stok: Terendah</option>
-          <option value="stock-high">Stok: Tertinggi</option>
-        </select>
+        
+        <div className="flex items-center gap-3">
+          <select
+            className="input-field w-auto min-w-[140px] appearance-none"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            suppressHydrationWarning
+          >
+            <option value="name">Urutkan: Nama</option>
+            <option value="stock-low">Stok: Terendah</option>
+            <option value="stock-high">Stok: Tertinggi</option>
+          </select>
+        </div>
       </div>
 
       {/* Category Tabs */}
@@ -522,7 +481,7 @@ export default function InventoryPage() {
           <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Unit</p>
           <p className="text-2xl font-bold text-white tabular-nums">
             <DynamicValue isMounted={isMounted}>
-              {totalItems.toLocaleString("id-ID")}
+              {filtered.reduce((sum, p) => sum + Object.values(p.stocks).reduce((a,b)=>a+b,0), 0)}
             </DynamicValue>
           </p>
         </div>
@@ -561,9 +520,13 @@ export default function InventoryPage() {
                 <th>Produk</th>
                 <th>SKU</th>
                 {hasAccess ? (
-                  branches.map(b => (
-                    <th key={b.id} style={{ textAlign: "center" }}>{b.name.split(' ')[2] || b.name}</th>
-                  ))
+                  selectedBranch === "all" ? (
+                    branches.map(b => (
+                      <th key={b.id} style={{ textAlign: "center" }}>{b.name.split(' ')[2] || b.name}</th>
+                    ))
+                  ) : (
+                    <th style={{ textAlign: "center" }}>Stok</th>
+                  )
                 ) : (
                   <th style={{ textAlign: "center" }}>Stok</th>
                 )}
@@ -587,11 +550,17 @@ export default function InventoryPage() {
                       <code className="text-[11px] text-white/40 font-mono">{product.sku}</code>
                     </td>
                     {hasAccess ? (
-                      branches.map(b => (
-                        <td key={b.id} style={{ textAlign: "center" }}>
-                          <StockBadge count={product.stocks?.[b.id] || 0} />
+                      selectedBranch === "all" ? (
+                        branches.map(b => (
+                          <td key={b.id} style={{ textAlign: "center" }}>
+                            <StockBadge count={product.stocks?.[b.id] || 0} />
+                          </td>
+                        ))
+                      ) : (
+                        <td style={{ textAlign: "center" }}>
+                          <StockBadge count={product.stocks?.[selectedBranch] || 0} />
                         </td>
-                      ))
+                      )
                     ) : (
                       <td style={{ textAlign: "center" }}>
                         <StockBadge count={product.stocks?.[currentUser?.branch_id] || 0} />
@@ -720,94 +689,63 @@ export default function InventoryPage() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Form Update */}
-                <div className="flex flex-col gap-4">
-                  <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Update Harga</h4>
-                  <div className="space-y-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs text-white/40">Harga Beli Baru (Rp)</label>
-                      <input 
-                        type="number" 
-                        className="input-field" 
-                        value={priceForm.buyPrice} 
-                        onChange={e => setPriceForm({...priceForm, buyPrice: e.target.value})} 
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs text-white/40">Harga Jual Baru (Rp)</label>
-                      <input 
-                        type="number" 
-                        className="input-field" 
-                        value={priceForm.sellPrice} 
-                        onChange={e => setPriceForm({...priceForm, sellPrice: e.target.value})} 
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs text-white/40">Alasan Perubahan</label>
-                      <textarea 
-                        className="input-field min-h-[80px] py-2 resize-none" 
-                        placeholder="e.g. Penurunan harga pusat / Promo Lebaran"
-                        value={priceForm.reason}
-                        onChange={e => setPriceForm({...priceForm, reason: e.target.value})}
-                      />
-                    </div>
-                    <button 
-                      onClick={handleUpdatePrice} 
-                      disabled={isUpdatingPrice}
-                      className="btn-gradient w-full py-3 text-sm font-bold flex items-center justify-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">save</span>
-                      {isUpdatingPrice ? "Memperbarui..." : "Update Harga Sekarang"}
-                    </button>
+            
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+              {/* Form Ubah Harga */}
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                <h4 className="text-xs font-bold text-white/60 uppercase mb-4 tracking-wider">Update Harga Baru</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-white/30 uppercase">Harga Beli Baru</label>
+                    <input type="number" className="input-field text-sm" value={priceForm.buyPrice} onChange={e => setPriceForm({...priceForm, buyPrice: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-white/30 uppercase">Harga Jual Baru</label>
+                    <input type="number" className="input-field text-sm font-bold text-indigo-400" value={priceForm.sellPrice} onChange={e => setPriceForm({...priceForm, sellPrice: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-white/30 uppercase">Alasan Perubahan</label>
+                    <input type="text" className="input-field text-sm" placeholder="e.g. Harga distributor naik" value={priceForm.reason} onChange={e => setPriceForm({...priceForm, reason: e.target.value})} />
                   </div>
                 </div>
+                <button 
+                  onClick={handleUpdatePrice} 
+                  disabled={isUpdatingPrice}
+                  className="w-full mt-4 btn-gradient py-2.5 text-xs font-bold flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">save</span>
+                  {isUpdatingPrice ? "Menyimpan..." : "Update Harga & Simpan Riwayat"}
+                </button>
+              </div>
 
-                {/* History List */}
-                <div className="flex flex-col gap-4">
-                  <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Riwayat Perubahan</h4>
-                  <div className="space-y-3">
-                    {priceHistory.length === 0 ? (
-                      <div className="py-10 text-center border border-dashed border-white/10 rounded-xl">
-                        <span className="material-symbols-outlined text-white/10 text-[32px] mb-2">history</span>
-                        <p className="text-xs text-white/20">Belum ada riwayat harga</p>
-                      </div>
-                    ) : (
-                      priceHistory.map((h) => (
-                        <div key={h.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col gap-2">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-white/60 font-semibold">{h.profiles?.full_name}</span>
-                            <span className="text-white/20">{new Date(h.created_at).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="flex flex-col">
-                              <span className="text-[9px] text-white/20 uppercase font-bold">Harga Beli</span>
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-white/40 line-through">{formatRupiah(h.old_buy_price)}</span>
-                                <span className="material-symbols-outlined text-[10px] text-white/20">arrow_forward</span>
-                                <span className="text-[10px] text-white font-bold">{formatRupiah(h.new_buy_price)}</span>
-                              </div>
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-[9px] text-white/20 uppercase font-bold">Harga Jual</span>
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-white/40 line-through">{formatRupiah(h.old_sell_price)}</span>
-                                <span className="material-symbols-outlined text-[10px] text-white/20">arrow_forward</span>
-                                <span className="text-[10px] text-emerald-400 font-bold">{formatRupiah(h.new_sell_price)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          {h.reason && (
-                            <p className="text-[10px] text-white/50 italic bg-white/[0.05] p-1.5 rounded-md border-l-2 border-indigo-500/50">
-                              "{h.reason}"
-                            </p>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
+              {/* Tabel Riwayat */}
+              <div>
+                <h4 className="text-xs font-bold text-white/60 uppercase mb-3 tracking-wider">Riwayat Perubahan Harga</h4>
+                <div className="border border-white/5 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-white/5 text-white/40 uppercase text-[9px] font-bold">
+                      <tr>
+                        <th className="px-4 py-2 border-b border-white/5">Tanggal</th>
+                        <th className="px-4 py-2 border-b border-white/5 text-right">Harga Beli</th>
+                        <th className="px-4 py-2 border-b border-white/5 text-right">Harga Jual</th>
+                        <th className="px-4 py-2 border-b border-white/5">Alasan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {priceHistory.length === 0 ? (
+                        <tr><td colSpan="4" className="px-4 py-8 text-center text-white/20">Belum ada riwayat perubahan.</td></tr>
+                      ) : (
+                        priceHistory.map((h, i) => (
+                          <tr key={i} className="hover:bg-white/[0.02]">
+                            <td className="px-4 py-3 text-white/40">{new Date(h.created_at).toLocaleDateString("id-ID")}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{formatRupiah(h.old_purchase_price)} → {formatRupiah(h.new_purchase_price)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-semibold text-white">{formatRupiah(h.new_retail_price)}</td>
+                            <td className="px-4 py-3 text-white/60 italic">{h.reason}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

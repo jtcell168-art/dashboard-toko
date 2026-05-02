@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useBranch } from "@/context/BranchContext";
 
 export default function TopBarDesktop({ sidebarWidth = 256, user }) {
-  const [branch, setBranch] = useState(user?.branch_id || "all");
+  const { selectedBranch, changeBranch } = useBranch();
   const [showBranches, setShowBranches] = useState(false);
   const [branches, setBranches] = useState([]);
 
@@ -25,7 +26,7 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
           const userBranch = data.find(b => b.id === user?.branch_id);
           if (userBranch) {
             setBranches([{ id: userBranch.id, label: userBranch.name }]);
-            setBranch(userBranch.id);
+            if (selectedBranch !== userBranch.id) changeBranch(userBranch.id);
           } else {
             setBranches([]);
           }
@@ -35,7 +36,7 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
     loadBranches();
   }, [hasBranchAccess, user?.branch_id]);
 
-  const currentBranch = branches.find((b) => b.id === branch) || (branches.length > 0 ? branches[0] : { id: "all", label: "Semua Cabang" });
+  const currentBranch = branches.find((b) => b.id === selectedBranch) || (branches.length > 0 ? branches[0] : { id: "all", label: "Semua Cabang" });
 
   return (
     <header
@@ -50,6 +51,7 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
         <input
           className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all"
           placeholder="Cari produk, transaksi, customer..."
+          suppressHydrationWarning
         />
         <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/20 bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/[0.06]">
           ⌘K
@@ -64,6 +66,7 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
         <button
           onClick={() => hasBranchAccess && setShowBranches(!showBranches)}
           className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] transition-colors text-sm ${hasBranchAccess ? "hover:bg-white/[0.08]" : "cursor-default"}`}
+          suppressHydrationWarning
         >
           <span className="material-symbols-outlined text-[18px] text-indigo-400">store</span>
           <span className="text-white/80">{currentBranch?.label}</span>
@@ -77,9 +80,9 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
               {branches.map((b) => (
                 <button
                   key={b.id}
-                  onClick={() => { setBranch(b.id); setShowBranches(false); }}
+                  onClick={() => { changeBranch(b.id); setShowBranches(false); }}
                   className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                    branch === b.id ? "text-indigo-400 bg-indigo-500/10" : "text-white/70 hover:bg-white/5"
+                    selectedBranch === b.id ? "text-indigo-400 bg-indigo-500/10" : "text-white/70 hover:bg-white/5"
                   }`}
                 >
                   {b.label}

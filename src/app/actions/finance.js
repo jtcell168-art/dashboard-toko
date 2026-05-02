@@ -84,11 +84,15 @@ export async function deleteExpense(id) {
 }
 
 // GET PNL DATA (Monthly Trend)
-export async function getPnlData() {
+export async function getPnlData(selectedBranchId = "all") {
   try {
     const supabase = await createClient();
     const user = await getCurrentUser();
     if (!user) return [];
+
+    const isOwner = user.role === "owner";
+    const userBranchId = user.branch_id;
+    let targetBranchId = isOwner ? (selectedBranchId === "all" ? null : selectedBranchId) : userBranchId;
 
     const now = new Date();
     const results = [];
@@ -113,7 +117,7 @@ export async function getPnlData() {
         .gte("created_at", startDate)
         .lte("created_at", endDate + "T23:59:59");
         
-      if (user.role === "manager" && user.branch_id) {
+      if (targetBranchId) {
         // We need to join with transactions to filter by branch
         itemsQuery = supabase
           .from("transaction_items")
@@ -123,7 +127,7 @@ export async function getPnlData() {
             transactions!inner(branch_id),
             products (purchase_price)
           `)
-          .eq("transactions.branch_id", user.branch_id)
+          .eq("transactions.branch_id", targetBranchId)
           .gte("created_at", startDate)
           .lte("created_at", endDate + "T23:59:59");
       }
@@ -145,8 +149,8 @@ export async function getPnlData() {
         .gte("date", startDate)
         .lte("date", endDate);
       
-      if (user.role === "manager" && user.branch_id) {
-        expQuery = expQuery.eq("branch_id", user.branch_id);
+      if (targetBranchId) {
+        expQuery = expQuery.eq("branch_id", targetBranchId);
       }
       const { data: expensesList } = await expQuery;
       const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);

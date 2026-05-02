@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getTotalSalaries } from "./salaries";
 
-export async function getDashboardData(startDate, endDate) {
+export async function getDashboardData(startDate, endDate, selectedBranchId = "all") {
   try {
     const supabase = await createClient();
 
@@ -23,13 +23,22 @@ export async function getDashboardData(startDate, endDate) {
     
     const isOwner = profile?.role === "owner";
     const userBranchId = profile?.branch_id;
+    
+    // Final branch filter logic: 
+    // - If owner and 'all' -> no filter
+    // - If owner and specific ID -> filter by ID
+    // - If manager -> always filter by their userBranchId
+    let targetBranchId = isOwner ? (selectedBranchId === "all" ? null : selectedBranchId) : userBranchId;
 
     // 1. Get total users
     const usersQuery = supabase.from("profiles").select("*", { count: "exact", head: true });
-    if (!isOwner && userBranchId) usersQuery.eq("branch_id", userBranchId);
+    if (targetBranchId) usersQuery.eq("branch_id", targetBranchId);
     const { count: usersCount } = await usersQuery;
 
     // 2. Get total products
+    // Note: products table might be global, but stock is branch-specific. 
+    // For dashboard, we usually show total variety or branch-specific available stock.
+    // Let's keep it global for 'variety' or filter by stock presence if branch selected.
     const { count: productsCount } = await supabase
       .from("products")
       .select("*", { count: "exact", head: true });
@@ -38,20 +47,14 @@ export async function getDashboardData(startDate, endDate) {
     const transactionsQuery = supabase
       .from("transactions")
       .select(`
-        id,
-        invoice_no,
-        type,
-        total,
-        status,
-        created_at,
-        payment_method,
+        id, invoice_no, type, total, status, created_at, payment_method,
         profiles (full_name),
         branches (name)
       `)
       .order("created_at", { ascending: false })
       .limit(5);
     
-    if (!isOwner && userBranchId) transactionsQuery.eq("branch_id", userBranchId);
+    if (targetBranchId) transactionsQuery.eq("branch_id", targetBranchId);
     if (startDate) transactionsQuery.gte("created_at", startDate);
     if (endDate) transactionsQuery.lte("created_at", endDate + "T23:59:59");
     const { data: recentTransactions } = await transactionsQuery;
@@ -62,7 +65,7 @@ export async function getDashboardData(startDate, endDate) {
       .select("total")
       .eq("status", "completed");
     
-    if (!isOwner && userBranchId) revenueQuery.eq("branch_id", userBranchId);
+    if (targetBranchId) revenueQuery.eq("branch_id", targetBranchId);
     if (startDate) revenueQuery.gte("created_at", startDate);
     if (endDate) revenueQuery.lte("created_at", endDate + "T23:59:59");
     const { data: revenues } = await revenueQuery;
@@ -74,7 +77,7 @@ export async function getDashboardData(startDate, endDate) {
       .from("service_tickets")
       .select("status");
     
-    if (!isOwner && userBranchId) servicesQuery.eq("branch_id", userBranchId);
+    if (targetBranchId) servicesQuery.eq("branch_id", targetBranchId);
     if (startDate) servicesQuery.gte("created_at", startDate);
     if (endDate) servicesQuery.lte("created_at", endDate + "T23:59:59");
     const { data: activeServicesList } = await servicesQuery;
@@ -93,12 +96,14 @@ export async function getDashboardData(startDate, endDate) {
       .order("created_at", { ascending: true })
       .limit(5);
     
-    if (!isOwner && userBranchId) alertsQuery.eq("branch_id", userBranchId);
+    if (targetBranchId) alertsQuery.eq("branch_id", targetBranchId);
     if (startDate) alertsQuery.gte("created_at", startDate);
     if (endDate) alertsQuery.lte("created_at", endDate + "T23:59:59");
     const { data: serviceAlerts } = await alertsQuery;
 
     // 7. Get Total Salaries (Manager/Owner only)
+    // For now, salaries are global for owners, or branch-specific if we have a way to filter salaries by branch
+    // (profiles.branch_id join required)
     let totalSalary = 0;
     if (profile?.role === "owner" || profile?.role === "manager") {
       totalSalary = await getTotalSalaries(startDate, endDate);
@@ -118,11 +123,14 @@ export async function getDashboardData(startDate, endDate) {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
-    const { data: last7DaysTrx } = await supabase
+    const salesHistoryQuery = supabase
       .from("transactions")
       .select("total, created_at")
       .eq("status", "completed")
       .gte("created_at", sevenDaysAgo.toISOString());
+    
+    if (targetBranchId) salesHistoryQuery.eq("branch_id", targetBranchId);
+    const { data: last7DaysTrx } = await salesHistoryQuery;
     
     const sales7Days = [];
     for (let i = 6; i >= 0; i--) {
@@ -138,12 +146,15 @@ export async function getDashboardData(startDate, endDate) {
       sales7Days.push({ day: dayStr, total: dayTotal });
     }
 
-    // 9. Revenue by Branch
-    const { data: branchRevenueData } = await supabase
+    // 9. Revenue by Branch (only relevant if 'all' branches or if owner wants comparison)
+    const branchRevenueQuery = supabase
       .from("transactions")
       .select("total, branches(name)")
       .eq("status", "completed")
       .gte("created_at", startDate || new Date().toISOString().split("T")[0]);
+    
+    if (targetBranchId) branchRevenueQuery.eq("branch_id", targetBranchId);
+    const { data: branchRevenueData } = await branchRevenueQuery;
     
     const branchMap = {};
     (branchRevenueData || []).forEach(t => {

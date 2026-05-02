@@ -8,6 +8,7 @@ import {
 import { useState, useEffect } from "react";
 import { getDashboardData } from "@/app/actions/dashboard";
 import { getEmployees, upsertSalary } from "@/app/actions/salaries";
+import { useBranch } from "@/context/BranchContext";
 import Link from "next/link";
 
 /* ============================
@@ -131,7 +132,7 @@ function RecentTransactions({ transactions = [] }) {
     <div className="chart-card">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white">Transaksi Terakhir</h3>
-        <Link href="/reports/pnl" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Lihat Semua →</Link>
+        <Link href="/reports/transactions" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Lihat Semua →</Link>
       </div>
       <div className="flex flex-col gap-1">
         {transactions.length === 0 ? (
@@ -196,6 +197,7 @@ function ServiceAlerts({ serviceAlerts = [] }) {
    DASHBOARD PAGE
    ============================ */
 export default function DashboardPage() {
+  const { selectedBranch, isMounted: branchIsMounted } = useBranch();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
@@ -214,9 +216,11 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
+    if (!branchIsMounted) return;
+    
     async function loadData() {
       setLoading(true);
-      const dbData = await getDashboardData(startDate, endDate);
+      const dbData = await getDashboardData(startDate, endDate, selectedBranch);
       setData(dbData);
       
       if (dbData.userRole === "owner" || dbData.userRole === "manager") {
@@ -227,7 +231,7 @@ export default function DashboardPage() {
       setLoading(false);
     }
     loadData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedBranch, branchIsMounted]);
 
   const handleSalarySubmit = async (e) => {
     e.preventDefault();
@@ -246,7 +250,7 @@ export default function DashboardPage() {
       setShowSalaryForm(false);
       setSalaryForm({ profile_id: "", base_salary: "", bonus: "", notes: "" });
       // Refresh dashboard data
-      const dbData = await getDashboardData(startDate, endDate);
+      const dbData = await getDashboardData(startDate, endDate, selectedBranch);
       setData(dbData);
     } catch (err) {
       alert("Gagal simpan gaji: " + err.message);
@@ -255,8 +259,8 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !data) {
-    return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dari Supabase...</div>;
+  if (loading || !data || !branchIsMounted) {
+    return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dashboard...</div>;
   }
 
   const totalServices = data.kpi.activeServices.pending + data.kpi.activeServices.process + data.kpi.activeServices.done;
@@ -270,26 +274,29 @@ export default function DashboardPage() {
           <p className="text-sm text-white/40 mt-1">Overview bisnis — Realtime</p>
         </div>
 
-        {/* Date Filter */}
-        <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
-          <div className="flex flex-col px-2 py-1">
-            <label className="text-[9px] uppercase font-bold text-white/30">Dari</label>
-            <input 
-              type="date" 
-              className="bg-transparent text-xs text-white focus:outline-none"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <div className="w-px h-6 bg-white/10" />
-          <div className="flex flex-col px-2 py-1">
-            <label className="text-[9px] uppercase font-bold text-white/30">Sampai</label>
-            <input 
-              type="date" 
-              className="bg-transparent text-xs text-white focus:outline-none"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
+        {/* Filters */}
+        <div className="flex items-center gap-3">
+          {/* Date Filter */}
+          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
+            <div className="flex flex-col px-2 py-1">
+              <label className="text-[9px] uppercase font-bold text-white/30">Dari</label>
+              <input 
+                type="date" 
+                className="bg-transparent text-xs text-white focus:outline-none"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="w-px h-6 bg-white/10" />
+            <div className="flex flex-col px-2 py-1">
+              <label className="text-[9px] uppercase font-bold text-white/30">Sampai</label>
+              <input 
+                type="date" 
+                className="bg-transparent text-xs text-white focus:outline-none"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -332,16 +339,6 @@ export default function DashboardPage() {
           accentClass="rose"
           href="/pos/service"
         />
-        {data.userRole === "manager" && (
-          <KPICard
-            icon="wallet"
-            iconColor="#8B5CF6"
-            title="Total Gaji (Bulan Ini)"
-            value={formatRupiah(data.kpi.totalSalary || 0)}
-            subValue="Biaya operasional gaji"
-            accentClass="indigo"
-          />
-        )}
       </div>
 
       {/* Salary Management Area (Owner & Manager) */}
@@ -434,3 +431,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
