@@ -110,13 +110,17 @@ export async function getPosProducts(branchId = "all") {
 export async function getAvailableImeis(productId, branchId) {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("imei_records")
       .select("id, imei")
       .eq("product_id", productId)
-      .eq("branch_id", branchId)
-      .eq("status", "stock")
-      .order("created_at", { ascending: true });
+      .eq("status", "stock");
+
+    if (branchId && branchId !== "all") {
+      query = query.eq("branch_id", branchId);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: true });
 
     if (error) throw error;
     return data || [];
