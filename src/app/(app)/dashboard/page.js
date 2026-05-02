@@ -64,25 +64,6 @@ function SalesChart({ sales7Days = [] }) {
             {p.name}: {formatRupiah(p.value)}
           </p>
         ))}
-        {/* Personal Kasbon (If any) */}
-        {data.kpi?.myKasbon > 0 && (
-          <div className="kpi-card rose relative overflow-hidden group">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all duration-500" />
-            <div className="flex items-center justify-between relative z-10">
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Sisa Kasbon Saya</p>
-                <p className="text-2xl font-bold text-white tabular-nums">{formatRupiah(data.kpi.myKasbon)}</p>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-rose-400">
-                <span className="material-symbols-outlined text-[24px]">account_balance_wallet</span>
-              </div>
-            </div>
-            <p className="text-[10px] text-white/20 mt-3 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[12px]">info</span>
-              Harap lalui cicilan tepat waktu
-            </p>
-          </div>
-        )}
       </div>
     );
   };
@@ -318,10 +299,26 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-6 relative z-10" suppressHydrationWarning>
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4" suppressHydrationWarning>
-        <div>
+        <div className="flex flex-col">
           <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-white/40 mt-1">Overview bisnis — Realtime</p>
         </div>
+
+        {/* Personal Kasbon Card */}
+        {data.kpi?.myKasbon > 0 && (
+          <div className="kpi-card rose relative overflow-hidden group max-w-xs ml-auto">
+            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl" />
+            <div className="flex items-center justify-between relative z-10 gap-4">
+              <div>
+                <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-0.5">Sisa Kasbon Saya</p>
+                <p className="text-xl font-bold text-white tabular-nums">{formatRupiah(data.kpi.myKasbon)}</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-rose-400">
+                <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
