@@ -107,6 +107,11 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
         }
         return null;
       }
+      if (role === "manager") {
+        if (item.label === "Laporan") {
+          return { ...item, children: item.children.filter(c => c.label !== "Laba Rugi") };
+        }
+      }
       if (role === "kasir") {
         if (item.label === "Pengaturan") return null;
         if (item.label === "Purchase Order") return null;

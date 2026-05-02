@@ -37,6 +37,16 @@ export default function PnLReportPage() {
 
   if (!branchIsMounted) return null;
 
+  if (currentUser && ["manager", "kasir"].includes(currentUser.role)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+        <span className="material-symbols-outlined text-6xl text-white/10 mb-4">lock</span>
+        <h2 className="text-xl font-bold text-white">Akses Dibatasi</h2>
+        <p className="text-white/40 mt-2">Anda tidak memiliki izin untuk melihat laporan laba rugi.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
