@@ -47,7 +47,7 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
     const transactionsQuery = supabase
       .from("transactions")
       .select(`
-        id, invoice_no, type, total, status, created_at, payment_method,
+        id, invoice_no, type, total, status, created_at, payment_method, branch_id,
         profiles (full_name),
         branches (name)
       `)
@@ -170,7 +170,7 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
     // 10. Revenue by Branch (only relevant if 'all' branches or if owner wants comparison)
     const branchRevenueQuery = supabase
       .from("transactions")
-      .select("total, branches(name)")
+      .select("total, branch_id, branches(name)")
       .eq("status", "completed")
       .gte("created_at", startDate || new Date().toISOString().split("T")[0]);
     
@@ -179,14 +179,21 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
     
     const branchMap = {};
     (branchRevenueData || []).forEach(t => {
-      const bName = t.branches?.name || "Unknown";
+      let bName = t.branches?.name;
+      if (!bName) {
+        // Fallback for mock data IDs if they exist in DB
+        if (t.branch_id === "c") bName = "JT CELL RIUNG";
+        else if (t.branch_id === "b") bName = "JT CELL LARANTUKA";
+        else if (t.branch_id === "a") bName = "JT CELL RUTENG";
+        else bName = "Tanpa Cabang";
+      }
       branchMap[bName] = (branchMap[bName] || 0) + Number(t.total);
     });
     
     const revenueByBranch = Object.entries(branchMap).map(([name, rev], i) => ({
       branch: name,
       revenue: rev,
-      color: ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#3B82F6"][i % 5]
+      color: ["#6366F1", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"][i % 5]
     }));
 
     return {

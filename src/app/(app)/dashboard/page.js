@@ -124,6 +124,14 @@ function RevenueChart({ revenueByBranch = [] }) {
 /* ============================
    RECENT TRANSACTIONS
    ============================ */
+const getBranchName = (trx) => {
+  if (trx.branches?.name) return trx.branches.name;
+  if (trx.branch_id === "a") return "JT CELL RUTENG";
+  if (trx.branch_id === "b") return "JT CELL LARANTUKA";
+  if (trx.branch_id === "c") return "JT CELL RIUNG";
+  return "Tanpa Cabang";
+};
+
 function RecentTransactions({ transactions = [] }) {
   const typeIcons = { retail: "shopping_bag", service: "build", digital: "phone_iphone" };
   const typeColors = { retail: "#6366F1", service: "#F59E0B", digital: "#3B82F6" };
@@ -146,7 +154,7 @@ function RecentTransactions({ transactions = [] }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-white truncate">{trx.profiles?.full_name || "Kasir"} — {trx.invoice_no}</p>
-              <p className="text-[10px] text-white/30 capitalize">{trx.type} · {trx.branches?.name || "Unknown"} · {trx.status}</p>
+              <p className="text-[10px] text-white/30 capitalize">{trx.type} · {getBranchName(trx)} · {trx.status}</p>
             </div>
             <div className="text-right shrink-0">
               <p className="text-xs font-semibold text-white">{formatRupiah(trx.total)}</p>
