@@ -146,7 +146,28 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       sales7Days.push({ day: dayStr, total: dayTotal });
     }
 
-    // 9. Revenue by Branch (only relevant if 'all' branches or if owner wants comparison)
+    // 9. Calculate Inventory Value (Owner only)
+    let inventoryValue = 0;
+    if (isOwner) {
+      let invQuery = supabase
+        .from("stock")
+        .select(`
+          quantity,
+          products ( purchase_price )
+        `);
+      if (targetBranchId) invQuery.eq("branch_id", targetBranchId);
+      
+      const { data: stockData } = await invQuery;
+      
+      if (stockData) {
+        inventoryValue = stockData.reduce((sum, s) => {
+          const price = Number(s.products?.purchase_price || 0);
+          return sum + (s.quantity * price);
+        }, 0);
+      }
+    }
+
+    // 10. Revenue by Branch (only relevant if 'all' branches or if owner wants comparison)
     const branchRevenueQuery = supabase
       .from("transactions")
       .select("total, branches(name)")
@@ -175,6 +196,7 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
         products: productsCount || 0,
         activeServices,
         totalSalary: totalSalary,
+        inventoryValue: inventoryValue,
       },
       recentTransactions: recentTransactions || [],
       sales7Days,

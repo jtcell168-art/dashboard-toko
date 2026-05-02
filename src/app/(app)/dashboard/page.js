@@ -263,12 +263,13 @@ export default function DashboardPage() {
     return <div className="p-8 text-center text-white/50 animate-pulse">Memuat data dashboard...</div>;
   }
 
-  const totalServices = data.kpi.activeServices.pending + data.kpi.activeServices.process + data.kpi.activeServices.done;
+  const activeServices = data.kpi.activeServices || { pending: 0, process: 0, done: 0 };
+  const totalServices = (activeServices.pending || 0) + (activeServices.process || 0) + (activeServices.done || 0);
 
   return (
-    <div className="flex flex-col gap-6 stagger-children">
+    <div className="flex flex-col gap-6 relative z-10" suppressHydrationWarning>
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4" suppressHydrationWarning>
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-white/40 mt-1">Overview bisnis — Realtime</p>
@@ -302,7 +303,10 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div 
+        className={`grid grid-cols-2 md:grid-cols-3 ${data.userRole === 'owner' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}
+        suppressHydrationWarning
+      >
         <KPICard
           icon="payments"
           iconColor="#6366F1"
@@ -321,6 +325,17 @@ export default function DashboardPage() {
           accentClass="amber"
           href="/inventory"
         />
+        {data.userRole === "owner" && (
+          <KPICard
+            icon="inventory_2"
+            iconColor="#8B5CF6"
+            title="Nilai Inventaris"
+            value={formatRupiah(data.kpi.inventoryValue)}
+            subValue="Total aset stok (harga beli)"
+            accentClass="violet"
+            href="/inventory"
+          />
+        )}
         <KPICard
           icon="group"
           iconColor="#10B981"
@@ -343,7 +358,7 @@ export default function DashboardPage() {
 
       {/* Salary Management Area (Owner & Manager) */}
       {(data.userRole === "owner" || data.userRole === "manager") && (
-        <div className="glass-card p-5 animate-fade-slide-up">
+        <div className="glass-card p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-indigo-400">payments</span>
@@ -358,7 +373,7 @@ export default function DashboardPage() {
           </div>
 
           {showSalaryForm && (
-            <form onSubmit={handleSalarySubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-fade-in">
+            <form onSubmit={handleSalarySubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Pegawai</label>
                 <select 

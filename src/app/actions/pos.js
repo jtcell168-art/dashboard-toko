@@ -34,24 +34,36 @@ export async function getPosProducts(branchId = "all") {
       return [];
     }
 
-    // 2. Fetch IMEI counts for HP products (status 'available')
-    const { data: imeiCounts } = await supabase
+    // 2. Fetch IMEIs for HP products (status 'stock')
+    const { data: imeiList } = await supabase
       .from("imei_records")
-      .select("product_id, branch_id")
+      .select("product_id, branch_id, imei")
       .eq("status", "stock");
 
     return products.map(product => {
       const isHP = product.categories?.name === "HP";
       let filteredStock = product.stock || [];
-      
-      if (isHP && imeiCounts) {
+      let productImeis = [];
+
+      if (isHP && imeiList) {
+        const productRelatedImeis = imeiList.filter(i => i.product_id === product.id);
+        
+        // Filter IMEIs by branch if needed
+        let branchFilteredImeis = productRelatedImeis;
+        if (branchId !== "all" && user?.role !== "owner" && user?.role !== "manager") {
+          branchFilteredImeis = productRelatedImeis.filter(i => i.branch_id === branchId);
+        } else if (branchId !== "all") {
+           // If owner/manager selected a specific branch
+           branchFilteredImeis = productRelatedImeis.filter(i => i.branch_id === branchId);
+        }
+        
+        productImeis = branchFilteredImeis.map(i => i.imei);
+
         // Calculate stock based on available IMEIs
         const branchCounts = {};
-        imeiCounts
-          .filter(i => i.product_id === product.id)
-          .forEach(i => {
-            branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
-          });
+        branchFilteredImeis.forEach(i => {
+          branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
+        });
         
         // Map back to stock structure
         filteredStock = filteredStock.map(s => ({
@@ -59,7 +71,6 @@ export async function getPosProducts(branchId = "all") {
           quantity: branchCounts[s.branch_id] || 0
         }));
 
-        // Add branches that have IMEIs but no stock record yet
         Object.entries(branchCounts).forEach(([bId, count]) => {
           if (!filteredStock.find(s => s.branch_id === bId)) {
             filteredStock.push({ branch_id: bId, quantity: count });
@@ -67,8 +78,10 @@ export async function getPosProducts(branchId = "all") {
         });
       }
 
-      // Filter by branch for staff
+      // Filter stock row by branch for non-owner/manager
       if (branchId !== "all" && user?.role !== "owner" && user?.role !== "manager") {
+        filteredStock = filteredStock.filter(s => s.branch_id === branchId);
+      } else if (branchId !== "all") {
         filteredStock = filteredStock.filter(s => s.branch_id === branchId);
       }
 
@@ -84,6 +97,7 @@ export async function getPosProducts(branchId = "all") {
         totalStock: totalQty,
         is_service: product.is_service,
         is_digital: product.is_digital,
+        imeis: productImeis, // New field for searching
       };
     });
   } catch (err) {
@@ -113,7 +127,7 @@ export async function getAvailableImeis(productId, branchId) {
 }
 
 // Proses Transaksi
-export async function processTransaction(cart, discountAmount, paymentMethod, customerName, branchId, userId, customerPhone = "", creditProvider = "", discountPercent = 0) {
+export async function processTransaction(cart, discountAmount, paymentMethod, customerName, branchId, userId, customerPhone = "", creditProvider = "", discountPercent = 0, installmentData = null) {
   const supabase = await createClient();
   
   const subtotal = cart.reduce((sum, item) => sum + item.sellPrice * item.qty, 0);
@@ -133,80 +147,91 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
       discount_amount: discountAmount,
       discount_percent: discountPercent,
       total: total,
-      payment_method: paymentMethod, // Ensure this matches CHECK constraint ('cash','transfer','qris','card')
+      payment_method: paymentMethod, 
       status: "completed",
-      notes: paymentMethod === 'card' && creditProvider ? `Credit Provider: ${creditProvider}` : null
+      notes: paymentMethod === 'card' && creditProvider ? `Credit Provider: ${creditProvider}` : (paymentMethod === 'installment' ? 'Internal Installment' : null)
     })
     .select()
     .single();
 
   if (trxError) throw new Error(trxError.message);
 
-    // 2. Insert item-item ke transaction_items & kurangi stok
-    for (const item of cart) {
-      const { data: itemData } = await supabase.from("transaction_items").insert({
+  // 1a. If installment, create installment record
+  if (paymentMethod === "installment" && installmentData) {
+    const { error: insError } = await supabase
+      .from("installments")
+      .insert({
         transaction_id: transaction.id,
-        product_id: item.id,
-        product_name: item.name,
-        quantity: item.qty,
-        unit_price: item.sellPrice,
-        subtotal: item.sellPrice * item.qty
-      }).select().single();
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        total_amount: total,
+        down_payment: Number(installmentData.downPayment || 0),
+        remaining_amount: total - Number(installmentData.downPayment || 0),
+        interest_rate: Number(installmentData.interestRate || 0),
+        tenor_months: Number(installmentData.tenor || 3),
+        status: "active",
+        due_date: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString()
+      });
+    
+    if (insError) throw new Error("Gagal mencatat data cicilan: " + insError.message);
+  }
 
-      // Kurangi stok (jika bukan jasa/digital dan ada branchId)
-      if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
-        if (item.category === "HP") {
-          // 2a. Update IMEI Records (Mark as Sold)
-          // If the cart item already has selectedImeis, use those.
-          // Otherwise, fallback to the oldest ones (though the UI should prevent this now)
-          let imeisToSold = [];
-          
-          if (item.selectedImeis && item.selectedImeis.length > 0) {
-            imeisToSold = item.selectedImeis;
-          } else {
-            const { data: availableImeis } = await supabase
-              .from("imei_records")
-              .select("id, imei")
-              .eq("product_id", item.id)
-              .eq("branch_id", branchId)
-              .eq("status", "stock")
-              .order("created_at", { ascending: true })
-              .limit(item.qty);
-            imeisToSold = availableImeis || [];
-          }
+  // 2. Insert item-item ke transaction_items & kurangi stok
+  for (const item of cart) {
+    const { data: itemData } = await supabase.from("transaction_items").insert({
+      transaction_id: transaction.id,
+      product_id: item.id,
+      product_name: item.name,
+      quantity: item.qty,
+      unit_price: item.sellPrice,
+      subtotal: item.sellPrice * item.qty
+    }).select().single();
 
-          if (imeisToSold.length > 0) {
-            for (const imei of imeisToSold) {
-              await supabase
-                .from("imei_records")
-                .update({ 
-                  status: "sold", 
-                  sold_at: new Date().toISOString()
-                })
-                .eq("id", imei.id);
-            }
-          }
+    if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
+      if (item.category === "HP") {
+        let imeisToSold = [];
+        if (item.selectedImeis && item.selectedImeis.length > 0) {
+          imeisToSold = item.selectedImeis;
+        } else {
+          const { data: availableImeis } = await supabase
+            .from("imei_records")
+            .select("id, imei")
+            .eq("product_id", item.id)
+            .eq("branch_id", branchId)
+            .eq("status", "stock")
+            .order("created_at", { ascending: true })
+            .limit(item.qty);
+          imeisToSold = availableImeis || [];
         }
 
-        // 2b. Update stock table (for non-HP or as redundancy)
-        const { data: stockRow } = await supabase
-          .from("stock")
-          .select("*")
-          .eq("product_id", item.id)
-          .eq("branch_id", branchId)
-          .maybeSingle();
-          
-        if (stockRow) {
-          await supabase
-            .from("stock")
-            .update({ quantity: Math.max(0, (stockRow.quantity || 0) - item.qty) })
-            .eq("id", stockRow.id);
-        } else {
-          // If no stock row, create one with negative? No, just skip or create.
-          // Usually there should be a stock row if getPosProducts found it.
+        if (imeisToSold.length > 0) {
+          for (const imei of imeisToSold) {
+            await supabase
+              .from("imei_records")
+              .update({ 
+                status: "sold", 
+                sold_at: new Date().toISOString()
+              })
+              .eq("id", imei.id);
+          }
         }
       }
+
+      const { data: stockRow } = await supabase
+        .from("stock")
+        .select("*")
+        .eq("product_id", item.id)
+        .eq("branch_id", branchId)
+        .maybeSingle();
+        
+      if (stockRow) {
+        await supabase
+          .from("stock")
+          .update({ quantity: Math.max(0, (stockRow.quantity || 0) - item.qty) })
+          .eq("id", stockRow.id);
+      }
     }
+  }
 
   return transaction;
 }

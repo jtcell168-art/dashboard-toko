@@ -14,7 +14,6 @@ export async function getExpenses(startDate, endDate) {
   if (startDate) query = query.gte("date", startDate);
   if (endDate) query = query.lte("date", endDate + "T23:59:59");
 
-  // Jika manager cabang, hanya ambil data cabangnya
   if (user.role === "manager" && user.branch_id) {
     query = query.eq("branch_id", user.branch_id);
   }
@@ -83,7 +82,90 @@ export async function deleteExpense(id) {
   return true;
 }
 
-// GET PNL DATA (Monthly Trend)
+// KASBON ACTIONS
+export async function getKasbon() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("kasbon")
+    .select("*, profiles(full_name, role)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addKasbon(kasbonData) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("kasbon")
+    .insert({
+      profile_id: kasbonData.profile_id,
+      amount: Number(kasbonData.amount),
+      remaining: Number(kasbonData.amount),
+      installment_amount: Number(kasbonData.installment_amount),
+      reason: kasbonData.reason,
+      status: "pending_approval"
+    });
+  if (error) throw error;
+  return true;
+}
+
+export async function approveKasbon(id) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("kasbon")
+    .update({ status: "active" })
+    .eq("id", id);
+  if (error) throw error;
+  return true;
+}
+
+export async function payKasbon(id, amount, note = "") {
+  const supabase = await createClient();
+  
+  const { data: current } = await supabase
+    .from("kasbon")
+    .select("remaining, amount")
+    .eq("id", id)
+    .single();
+  
+  if (!current) throw new Error("Kasbon not found");
+
+  const newRemaining = Math.max(0, Number(current.remaining) - Number(amount));
+  const newStatus = newRemaining === 0 ? "paid" : "active";
+
+  const { error: upError } = await supabase
+    .from("kasbon")
+    .update({ 
+      remaining: newRemaining,
+      status: newStatus
+    })
+    .eq("id", id);
+  
+  if (upError) throw upError;
+  return true;
+}
+
+// INSTALLMENT ACTIONS
+export async function getInstallments() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("installments")
+    .select("*, transactions(invoice_no)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addInstallment(data) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("installments")
+    .insert(data);
+  if (error) throw error;
+  return true;
+}
+
+// GET PNL DATA
 export async function getPnlData(selectedBranchId = "all") {
   try {
     const supabase = await createClient();
@@ -97,7 +179,6 @@ export async function getPnlData(selectedBranchId = "all") {
     const now = new Date();
     const results = [];
 
-    // Loop for last 6 months
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const month = d.toLocaleString('id-ID', { month: 'long' });
@@ -106,7 +187,6 @@ export async function getPnlData(selectedBranchId = "all") {
       const startDate = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
       const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
 
-      // 1. Revenue & COGS from transactions
       let itemsQuery = supabase
         .from("transaction_items")
         .select(`
@@ -118,7 +198,6 @@ export async function getPnlData(selectedBranchId = "all") {
         .lte("created_at", endDate + "T23:59:59");
         
       if (targetBranchId) {
-        // We need to join with transactions to filter by branch
         itemsQuery = supabase
           .from("transaction_items")
           .select(`
@@ -142,7 +221,6 @@ export async function getPnlData(selectedBranchId = "all") {
         cogs += pPrice * item.quantity;
       });
 
-      // 2. Expenses
       let expQuery = supabase
         .from("expenses")
         .select("amount")
@@ -155,9 +233,6 @@ export async function getPnlData(selectedBranchId = "all") {
       const { data: expensesList } = await expQuery;
       const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
 
-      // 3. Salaries (only if owner or manager)
-      // Note: salaries table doesn't have branch_id currently, so it's a global expense for owners
-      // or we skip it for branch managers if not applicable.
       let salaries = 0;
       if (user.role === "owner") {
         salaries = await getTotalSalaries(startDate, endDate);

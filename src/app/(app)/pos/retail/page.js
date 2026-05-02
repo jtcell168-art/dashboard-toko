@@ -11,7 +11,8 @@ const PAYMENT_METHODS = [
   { id: "cash", label: "Cash", icon: "payments" },
   { id: "transfer", label: "Transfer", icon: "account_balance" },
   { id: "qris", label: "QRIS", icon: "qr_code_2" },
-  { id: "card", label: "Credit", icon: "credit_card" },
+  { id: "card", label: "Debit/Credit", icon: "credit_card" },
+  { id: "installment", label: "Cicilan", icon: "calendar_month" },
 ];
 
 const CREDIT_PROVIDERS = ["Vast Finance", "Kredivo Reguler", "Yess Kredit", "Spektra", "Bank"];
@@ -25,6 +26,7 @@ export default function RetailPOSPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [creditProvider, setCreditProvider] = useState(CREDIT_PROVIDERS[0]);
+  const [installmentData, setInstallmentData] = useState({ downPayment: "", tenor: "3", interestRate: "0" });
 
   const [dbProducts, setDbProducts] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
@@ -50,7 +52,10 @@ export default function RetailPOSPage() {
     if (search) {
       const q = search.toLowerCase();
       items = items.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
+        (p) => 
+          p.name.toLowerCase().includes(q) || 
+          p.sku.toLowerCase().includes(q) ||
+          (p.imeis && p.imeis.some(imei => imei.toLowerCase().includes(q)))
       );
     }
     return items;
@@ -128,7 +133,8 @@ export default function RetailPOSPage() {
         currentUser?.id,
         customerPhone,
         creditProvider,
-        parseFloat(discountPercent) || 0
+        parseFloat(discountPercent) || 0,
+        paymentMethod === "installment" ? installmentData : null
       );
       setShowReceipt(true);
       
@@ -162,6 +168,8 @@ export default function RetailPOSPage() {
         customerName={customerName}
         onNewTransaction={handleNewTransaction}
         branchInfo={currentUser?.branches}
+        creditProvider={creditProvider}
+        installmentData={installmentData}
       />
     );
   }
@@ -400,9 +408,9 @@ export default function RetailPOSPage() {
               </div>
 
               {/* Credit Provider Dropdown */}
-              {paymentMethod === "credit" && (
+              {paymentMethod === "card" && (
                 <div className="flex flex-col gap-1.5 animate-fade-slide-up">
-                  <label className="text-[10px] text-white/40 uppercase font-bold ml-1">Finance / Bank</label>
+                  <label className="text-[10px] text-white/40 uppercase font-bold ml-1">Mesin EDC / Bank</label>
                   <select 
                     className="input-field text-xs py-2"
                     value={creditProvider}
@@ -412,6 +420,72 @@ export default function RetailPOSPage() {
                       <option key={cp} value={cp}>{cp}</option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* Installment Fields */}
+              {paymentMethod === "installment" && (
+                <div className="flex flex-col gap-3 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 animate-fade-slide-up">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-indigo-400 uppercase font-bold ml-1">DP (Rp)</label>
+                      <input 
+                        type="number"
+                        className="input-field text-xs"
+                        placeholder="0"
+                        value={installmentData.downPayment}
+                        onChange={(e) => setInstallmentData({...installmentData, downPayment: e.target.value})}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-indigo-400 uppercase font-bold ml-1">Bunga (%)</label>
+                      <input 
+                        type="number"
+                        className="input-field text-xs"
+                        placeholder="0"
+                        value={installmentData.interestRate}
+                        onChange={(e) => setInstallmentData({...installmentData, interestRate: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-indigo-400 uppercase font-bold ml-1">Tenor (Bulan)</label>
+                    <select 
+                      className="input-field text-xs"
+                      value={installmentData.tenor}
+                      onChange={(e) => setInstallmentData({...installmentData, tenor: e.target.value})}
+                    >
+                      <option value="1">1 Bulan (Cash Tempo)</option>
+                      <option value="2">2 Bulan</option>
+                      <option value="3">3 Bulan</option>
+                      <option value="6">6 Bulan</option>
+                      <option value="12">12 Bulan</option>
+                    </select>
+                  </div>
+
+                  <div className="h-px bg-white/[0.06] my-1" />
+
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[10px] text-white/40">Pokok Hutang:</span>
+                      <span className="text-xs text-white">
+                        {formatRupiah(total - Number(installmentData.downPayment || 0))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center px-1 bg-indigo-500/10 py-1.5 rounded-lg mt-1 border border-indigo-500/20">
+                      <span className="text-[10px] text-indigo-300 font-bold uppercase">Angsuran / Bulan:</span>
+                      <span className="text-sm font-bold text-white">
+                        {(() => {
+                          const principal = total - Number(installmentData.downPayment || 0);
+                          const interest = (principal * Number(installmentData.interestRate || 0)) / 100;
+                          const totalPay = principal + interest;
+                          const monthly = totalPay / Number(installmentData.tenor || 1);
+                          return formatRupiah(Math.round(monthly));
+                        })()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -464,8 +538,8 @@ export default function RetailPOSPage() {
 /* ============================
    RECEIPT VIEW
    ============================ */
-function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, customerName, onNewTransaction, branchInfo }) {
-  const pmLabels = { cash: "Cash", transfer: "Transfer Bank", qris: "QRIS", card: "Credit / Debit" };
+function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, customerName, onNewTransaction, branchInfo, creditProvider, installmentData }) {
+  const pmLabels = { cash: "Cash", transfer: "Transfer Bank", qris: "QRIS", card: "Debit / Credit", installment: "Cicilan Internal" };
   const trxId = `TRX-${Date.now().toString(36).toUpperCase().slice(-6)}`;
   const now = new Date();
 
@@ -533,9 +607,29 @@ function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, cus
           <span className="text-sm font-bold text-white print:text-black">TOTAL</span>
           <span className="text-lg font-bold text-white print:text-black tabular-nums">{formatRupiah(total)}</span>
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-white/40 print:text-black/60">Metode Bayar</span>
-          <span className="text-white print:text-black">{pmLabels[paymentMethod]}</span>
+        <div className="flex flex-col gap-1 mt-1 border-t border-white/[0.04] pt-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-white/40 print:text-black/60">Metode Bayar</span>
+            <span className="text-white print:text-black font-bold">{pmLabels[paymentMethod]}</span>
+          </div>
+          {paymentMethod === "card" && creditProvider && (
+            <div className="flex justify-between text-[10px]">
+              <span className="text-white/30 print:text-black/50">Provider</span>
+              <span className="text-white/70 print:text-black/70 italic">{creditProvider}</span>
+            </div>
+          )}
+          {paymentMethod === "installment" && (
+            <div className="flex flex-col gap-0.5">
+              <div className="flex justify-between text-[10px]">
+                <span className="text-white/30 print:text-black/50">DP / Tenor</span>
+                <span className="text-white/70 print:text-black/70 italic">{formatRupiah(installmentData.downPayment || 0)} / {installmentData.tenor} bln</span>
+              </div>
+              <div className="flex justify-between text-[10px]">
+                <span className="text-white/30 print:text-black/50">Bunga / Bln</span>
+                <span className="text-white/70 print:text-black/70 italic">{installmentData.interestRate}%</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -71,6 +71,8 @@ export default function TransactionReportPage() {
       Tipe: t.type,
       Kasir: t.profiles?.full_name,
       Customer: t.customer_name,
+      Metode_Bayar: t.payment_method,
+      Keterangan: t.notes || "-",
       Total: t.total,
       Status: t.status
     }));
