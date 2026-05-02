@@ -5,10 +5,30 @@ import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/app/actions/finance";
 import { getBranches } from "@/app/actions/branches";
+import { getEmployees } from "@/app/actions/salaries";
 import { getCurrentUser } from "@/app/actions/auth";
 import { exportToExcel } from "@/lib/utils/export";
 
-const CATEGORIES = ["Sewa Toko", "Listrik", "Internet", "Gaji", "Transportasi", "Maintenance", "Lainnya"];
+const CATEGORIES = [
+  "Sewa Toko", 
+  "Listrik", 
+  "Internet", 
+  "Gaji", 
+  "Transportasi", 
+  "Maintenance", 
+  "Kirim HP (Antar Gudang)", 
+  "Kirim HP (Supplier)", 
+  "Pembelian Aset Tetap", 
+  "Renovasi Gedung", 
+  "Kirim Etalase", 
+  "Cetak Promosi", 
+  "Service Kendaraan",
+  "Sumbangan / Duka",
+  "Kirim Meja Demo",
+  "THR (Tunjangan Hari Raya)",
+  "Transfer Laba", 
+  "Lainnya"
+];
 
 export default function ExpensesPage() {
   const [showForm, setShowForm] = useState(false);
@@ -16,6 +36,7 @@ export default function ExpensesPage() {
   
   const [expenses, setExpenses] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState(() => {
@@ -37,12 +58,14 @@ export default function ExpensesPage() {
       const u = await getCurrentUser();
       setCurrentUser(u);
       
-      const [expData, branchData] = await Promise.all([
+      const [expData, branchData, empData] = await Promise.all([
         getExpenses(startDate, endDate),
-        getBranches()
+        getBranches(),
+        getEmployees()
       ]);
       setExpenses(expData);
       setBranches(branchData);
+      setEmployees((empData || []).filter(e => e.role !== 'owner'));
       
       if (u?.branch_id && branchData.find(b => b.id === u.branch_id)) {
         setForm(f => ({ ...f, branchId: u.branch_id }));
@@ -126,10 +149,13 @@ export default function ExpensesPage() {
             <span className="material-symbols-outlined text-[18px]">download</span>
             <span className="hidden sm:inline">Export Excel</span>
           </button>
-          <button onClick={() => setShowForm(!showForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">{showForm ? "close" : "add"}</span>
-            {showForm ? "Batal" : "Tambah Biaya"}
-          </button>
+          
+          {hasAccess && (
+            <button onClick={() => setShowForm(!showForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">{showForm ? "close" : "add"}</span>
+              {showForm ? "Batal" : "Tambah Biaya"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -177,14 +203,39 @@ export default function ExpensesPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-white/40">Cabang *</label>
-              <select className="input-field" value={form.branchId} onChange={e => setForm({...form, branchId: e.target.value})} disabled={currentUser?.role !== "owner"}>
+              <select className="input-field" value={form.branchId} onChange={e => setForm({...form, branchId: e.target.value})} disabled={!["owner", "manager"].includes(currentUser?.role)}>
                 <option value="">Pilih Cabang</option>
-                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                {branches
+                  .filter(b => ["owner", "manager"].includes(currentUser?.role) || b.id === currentUser?.branch_id)
+                  .map(b => <option key={b.id} value={b.id}>{b.name}</option>)
+                }
               </select>
             </div>
+            {form.category === "THR (Tunjangan Hari Raya)" && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-white/40">Penerima THR *</label>
+                <select 
+                  className="input-field"
+                  onChange={e => {
+                    const emp = employees.find(emp => emp.id === e.target.value);
+                    if (emp) setForm({ ...form, note: `THR: ${emp.full_name}` });
+                  }}
+                >
+                  <option value="">Pilih Karyawan</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.role})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-white/40">Catatan</label>
-              <input className="input-field" value={form.note} onChange={e => setForm({...form, note: e.target.value})} placeholder="Keterangan" />
+              <input 
+                className="input-field" 
+                value={form.note} 
+                onChange={e => setForm({...form, note: e.target.value})} 
+                placeholder={form.category === "Transfer Laba" ? "Laba periode x - y, Rekening: BRI 123..." : "Keterangan"} 
+              />
             </div>
           </div>
           <button onClick={handleAdd} disabled={!form.category || !form.amount || !form.branchId} className="btn-gradient py-3 text-sm disabled:opacity-40 mt-2">Simpan</button>

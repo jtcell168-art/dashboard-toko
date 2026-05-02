@@ -176,85 +176,102 @@ export async function getPnlData(selectedBranchId = "all") {
     const userBranchId = user.branch_id;
     let targetBranchId = isOwner ? (selectedBranchId === "all" ? null : selectedBranchId) : userBranchId;
 
-    const now = new Date();
     const results = [];
 
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const month = d.toLocaleString('id-ID', { month: 'long' });
-      const year = d.getFullYear();
-      
-      const startDate = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
-      const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    // Jika ada filter tanggal kustom
+    if (customStart && customEnd) {
+      let current = new Date(customStart);
+      const last = new Date(customEnd);
 
-      let itemsQuery = supabase
-        .from("transaction_items")
-        .select(`
-          quantity,
-          subtotal,
-          purchase_price,
-          products (purchase_price)
-        `)
-        .gte("created_at", startDate)
-        .lte("created_at", endDate + "T23:59:59");
+      while (current <= last) {
+        const dateStr = current.toISOString().split('T')[0];
+        const displayDate = current.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
         
-      if (targetBranchId) {
-        itemsQuery = supabase
+        const dayStart = dateStr + "T00:00:00";
+        const dayEnd = dateStr + "T23:59:59";
+
+        // Query Items
+        let itemsQuery = supabase
           .from("transaction_items")
-          .select(`
-            quantity,
-            subtotal,
-            purchase_price,
-            transactions!inner(branch_id),
-            products (purchase_price)
-          `)
-          .eq("transactions.branch_id", targetBranchId)
+          .select("quantity, subtotal, purchase_price, transactions!inner(status, branch_id), products(purchase_price)")
+          .eq("transactions.status", "completed")
+          .gte("created_at", dayStart)
+          .lte("created_at", dayEnd);
+        
+        if (targetBranchId) itemsQuery = itemsQuery.eq("transactions.branch_id", targetBranchId);
+        const { data: items } = await itemsQuery;
+
+        let revenue = 0, cogs = 0;
+        (items || []).forEach(item => {
+          revenue += Number(item.subtotal);
+          let pPrice = (item.purchase_price && Number(item.purchase_price) > 0) ? Number(item.purchase_price) : (item.products?.purchase_price || 0);
+          cogs += pPrice * item.quantity;
+        });
+
+        // Query Expenses
+        let expQuery = supabase.from("expenses").select("amount").eq("date", dateStr);
+        if (targetBranchId) expQuery = expQuery.eq("branch_id", targetBranchId);
+        const { data: expensesList } = await expQuery;
+        const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
+
+        // Salaries
+        let salaries = 0;
+        if (user.role === "owner") salaries = await getTotalSalaries(dayStart, dayEnd);
+
+        const totalExpenses = expenses + salaries;
+        results.push({
+          label: displayDate,
+          revenue,
+          cogs,
+          expenses: totalExpenses,
+          profit: revenue - cogs - totalExpenses
+        });
+
+        current.setDate(current.getDate() + 1);
+      }
+    } else {
+      // Default: 6 Bulan Terakhir
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const month = d.toLocaleString('id-ID', { month: 'long' });
+        const startDate = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+        const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+
+        let itemsQuery = supabase
+          .from("transaction_items")
+          .select("quantity, subtotal, purchase_price, transactions!inner(status, branch_id), products(purchase_price)")
+          .eq("transactions.status", "completed")
           .gte("created_at", startDate)
           .lte("created_at", endDate + "T23:59:59");
+          
+        if (targetBranchId) itemsQuery = itemsQuery.eq("transactions.branch_id", targetBranchId);
+        const { data: items } = await itemsQuery;
+
+        let revenue = 0, cogs = 0;
+        (items || []).forEach(item => {
+          revenue += Number(item.subtotal);
+          let pPrice = (item.purchase_price && Number(item.purchase_price) > 0) ? Number(item.purchase_price) : (item.products?.purchase_price || 0);
+          cogs += pPrice * item.quantity;
+        });
+
+        let expQuery = supabase.from("expenses").select("amount").gte("date", startDate).lte("date", endDate);
+        if (targetBranchId) expQuery = expQuery.eq("branch_id", targetBranchId);
+        const { data: expensesList } = await expQuery;
+        const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
+
+        let salaries = 0;
+        if (user.role === "owner") salaries = await getTotalSalaries(startDate, endDate);
+
+        const totalExpenses = expenses + salaries;
+        results.push({
+          label: month,
+          revenue,
+          cogs,
+          expenses: totalExpenses,
+          profit: revenue - cogs - totalExpenses
+        });
       }
-
-      const { data: items } = await itemsQuery;
-
-      let revenue = 0;
-      let cogs = 0;
-      (items || []).forEach(item => {
-        revenue += Number(item.subtotal);
-        // Prioritize purchase_price in transaction_items (for digital/manual)
-        // fallback to products.purchase_price (for retail)
-        const pPrice = item.purchase_price !== undefined && item.purchase_price !== null 
-          ? Number(item.purchase_price) 
-          : (item.products?.purchase_price || 0);
-        cogs += pPrice * item.quantity;
-      });
-
-      let expQuery = supabase
-        .from("expenses")
-        .select("amount")
-        .gte("date", startDate)
-        .lte("date", endDate);
-      
-      if (targetBranchId) {
-        expQuery = expQuery.eq("branch_id", targetBranchId);
-      }
-      const { data: expensesList } = await expQuery;
-      const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
-
-      let salaries = 0;
-      if (user.role === "owner") {
-        salaries = await getTotalSalaries(startDate, endDate);
-      }
-
-      const totalExpenses = expenses + salaries;
-      const profit = revenue - cogs - totalExpenses;
-
-      results.push({
-        month,
-        year,
-        revenue,
-        cogs,
-        expenses: totalExpenses,
-        profit
-      });
     }
 
     return results;
