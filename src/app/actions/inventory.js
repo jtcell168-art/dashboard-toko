@@ -40,7 +40,7 @@ export async function getInventory(branchId = "all") {
     const { data: imeiCounts } = await supabase
       .from("imei_records")
       .select("product_id, branch_id")
-      .eq("status", "available");
+      .eq("status", "stock");
 
     // Flatten categories and calculate real-time stock
     return data.map(p => {
@@ -172,7 +172,7 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
         product_id: productId,
         branch_id: item.branchId,
         imei: item.imei,
-        status: 'available'
+        status: 'stock'
       }));
       const { error: imeiError } = await supabase.from("imei_records").insert(imeiInserts);
       if (imeiError) return { success: false, error: "Gagal menyimpan IMEI: " + imeiError.message };

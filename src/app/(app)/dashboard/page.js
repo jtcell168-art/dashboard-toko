@@ -138,14 +138,14 @@ function RecentTransactions({ transactions = [] }) {
           <p className="text-xs text-white/40 text-center py-4">Belum ada transaksi</p>
         ) : transactions.map((trx) => (
           <div key={trx.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${typeColors[trx.payment_method === 'cash' ? 'retail' : 'digital']}15` }}>
-              <span className="material-symbols-outlined text-[18px]" style={{ color: typeColors[trx.payment_method === 'cash' ? 'retail' : 'digital'] }}>
-                {typeIcons[trx.payment_method === 'cash' ? 'retail' : 'digital']}
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${typeColors[trx.type] || '#6366F1'}15` }}>
+              <span className="material-symbols-outlined text-[18px]" style={{ color: typeColors[trx.type] || '#6366F1' }}>
+                {typeIcons[trx.type] || 'shopping_bag'}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-white truncate">{trx.profiles?.full_name || "Kasir"} — {trx.invoice_no}</p>
-              <p className="text-[10px] text-white/30 capitalize">{trx.payment_method} · {trx.status}</p>
+              <p className="text-[10px] text-white/30 capitalize">{trx.type} · {trx.branches?.name || "Unknown"} · {trx.status}</p>
             </div>
             <div className="text-right shrink-0">
               <p className="text-xs font-semibold text-white">{formatRupiah(trx.total)}</p>

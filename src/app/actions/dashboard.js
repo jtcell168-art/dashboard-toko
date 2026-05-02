@@ -40,18 +40,20 @@ export async function getDashboardData(startDate, endDate) {
       .select(`
         id,
         invoice_no,
+        type,
         total,
         status,
         created_at,
         payment_method,
-        profiles (full_name)
+        profiles (full_name),
+        branches (name)
       `)
       .order("created_at", { ascending: false })
       .limit(5);
     
     if (!isOwner && userBranchId) transactionsQuery.eq("branch_id", userBranchId);
     if (startDate) transactionsQuery.gte("created_at", startDate);
-    if (endDate) transactionsQuery.lte("created_at", endDate);
+    if (endDate) transactionsQuery.lte("created_at", endDate + "T23:59:59");
     const { data: recentTransactions } = await transactionsQuery;
 
     // 4. Get total revenue (completed transactions)
@@ -62,7 +64,7 @@ export async function getDashboardData(startDate, endDate) {
     
     if (!isOwner && userBranchId) revenueQuery.eq("branch_id", userBranchId);
     if (startDate) revenueQuery.gte("created_at", startDate);
-    if (endDate) revenueQuery.lte("created_at", endDate);
+    if (endDate) revenueQuery.lte("created_at", endDate + "T23:59:59");
     const { data: revenues } = await revenueQuery;
 
     const totalRevenue = revenues?.reduce((sum, t) => sum + Number(t.total), 0) || 0;
@@ -74,7 +76,7 @@ export async function getDashboardData(startDate, endDate) {
     
     if (!isOwner && userBranchId) servicesQuery.eq("branch_id", userBranchId);
     if (startDate) servicesQuery.gte("created_at", startDate);
-    if (endDate) servicesQuery.lte("created_at", endDate);
+    if (endDate) servicesQuery.lte("created_at", endDate + "T23:59:59");
     const { data: activeServicesList } = await servicesQuery;
 
     const activeServices = {
@@ -93,7 +95,7 @@ export async function getDashboardData(startDate, endDate) {
     
     if (!isOwner && userBranchId) alertsQuery.eq("branch_id", userBranchId);
     if (startDate) alertsQuery.gte("created_at", startDate);
-    if (endDate) alertsQuery.lte("created_at", endDate);
+    if (endDate) alertsQuery.lte("created_at", endDate + "T23:59:59");
     const { data: serviceAlerts } = await alertsQuery;
 
     // 7. Get Total Salaries (Manager/Owner only)
@@ -112,6 +114,49 @@ export async function getDashboardData(startDate, endDate) {
       technician: s.profiles?.full_name || null
     }));
 
+    // 8. Calculate Sales 7 Days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const { data: last7DaysTrx } = await supabase
+      .from("transactions")
+      .select("total, created_at")
+      .eq("status", "completed")
+      .gte("created_at", sevenDaysAgo.toISOString());
+    
+    const sales7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dayStr = d.toLocaleDateString("id-ID", { weekday: "short" });
+      const dateStr = d.toISOString().split("T")[0];
+      
+      const dayTotal = (last7DaysTrx || [])
+        .filter(t => t.created_at.startsWith(dateStr))
+        .reduce((sum, t) => sum + Number(t.total), 0);
+      
+      sales7Days.push({ day: dayStr, total: dayTotal });
+    }
+
+    // 9. Revenue by Branch
+    const { data: branchRevenueData } = await supabase
+      .from("transactions")
+      .select("total, branches(name)")
+      .eq("status", "completed")
+      .gte("created_at", startDate || new Date().toISOString().split("T")[0]);
+    
+    const branchMap = {};
+    (branchRevenueData || []).forEach(t => {
+      const bName = t.branches?.name || "Unknown";
+      branchMap[bName] = (branchMap[bName] || 0) + Number(t.total);
+    });
+    
+    const revenueByBranch = Object.entries(branchMap).map(([name, rev], i) => ({
+      branch: name,
+      revenue: rev,
+      color: ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#3B82F6"][i % 5]
+    }));
+
     return {
       kpi: {
         revenue: totalRevenue,
@@ -121,8 +166,8 @@ export async function getDashboardData(startDate, endDate) {
         totalSalary: totalSalary,
       },
       recentTransactions: recentTransactions || [],
-      sales7Days: [],
-      revenueByBranch: [],
+      sales7Days,
+      revenueByBranch,
       serviceAlerts: mappedAlerts,
       userRole: profile?.role
     };

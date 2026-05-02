@@ -16,7 +16,7 @@ export async function getCurrentUser() {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("*, branches(name)")
+      .select("*, branches(*)")
       .eq("id", user.id)
       .maybeSingle();
 

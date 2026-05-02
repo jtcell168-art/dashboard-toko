@@ -5,12 +5,13 @@ import { formatRupiah } from "@/data/mockData";
 import { getPosProducts, processTransaction } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
 import Scanner from "@/components/Scanner";
+import IMEISelector from "@/components/pos/IMEISelector";
 
 const PAYMENT_METHODS = [
   { id: "cash", label: "Cash", icon: "payments" },
   { id: "transfer", label: "Transfer", icon: "account_balance" },
   { id: "qris", label: "QRIS", icon: "qr_code_2" },
-  { id: "credit", label: "Credit", icon: "credit_card" },
+  { id: "card", label: "Credit", icon: "credit_card" },
 ];
 
 const CREDIT_PROVIDERS = ["Vast Finance", "Kredivo Reguler", "Yess Kredit", "Spektra", "Bank"];
@@ -30,6 +31,7 @@ export default function RetailPOSPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [selectingImeiItem, setSelectingImeiItem] = useState(null); // { productId, cartIdx }
 
   useEffect(() => {
     async function loadData() {
@@ -56,14 +58,35 @@ export default function RetailPOSPage() {
 
   const addToCart = (product) => {
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
-      if (existing) {
-        return prev.map((item) =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item
+      const existingIdx = prev.findIndex((item) => item.id === product.id);
+      if (existingIdx !== -1) {
+        return prev.map((item, idx) =>
+          idx === existingIdx ? { ...item, qty: item.qty + 1 } : item
         );
       }
-      return [...prev, { ...product, qty: 1 }];
+      return [...prev, { ...product, qty: 1, selectedImeis: [] }];
     });
+  };
+
+  const selectImei = (productId, itemIdx, imei) => {
+    setCart(prev => prev.map((item, idx) => {
+      if (idx === itemIdx) {
+        const currentImeis = item.selectedImeis || [];
+        if (currentImeis.length < item.qty) {
+          return { ...item, selectedImeis: [...currentImeis, imei] };
+        }
+      }
+      return item;
+    }));
+  };
+
+  const removeImei = (itemIdx, imeiId) => {
+    setCart(prev => prev.map((item, idx) => {
+      if (idx === itemIdx) {
+        return { ...item, selectedImeis: (item.selectedImeis || []).filter(i => i.id !== imeiId) };
+      }
+      return item;
+    }));
   };
 
   const updateQty = (productId, delta) => {
@@ -86,6 +109,14 @@ export default function RetailPOSPage() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+
+    // Validation: HP products must have correct number of IMEIs
+    const hpMissingImei = cart.find(item => item.category === "HP" && (item.selectedImeis?.length || 0) < item.qty);
+    if (hpMissingImei) {
+      alert(`Produk ${hpMissingImei.name} memerlukan ${hpMissingImei.qty} IMEI. Silakan pilih IMEI terlebih dahulu.`);
+      return;
+    }
+
     setIsProcessing(true);
     try {
       await processTransaction(
@@ -96,7 +127,8 @@ export default function RetailPOSPage() {
         currentUser?.branch_id || "all",
         currentUser?.id,
         customerPhone,
-        creditProvider
+        creditProvider,
+        parseFloat(discountPercent) || 0
       );
       setShowReceipt(true);
       
@@ -129,6 +161,7 @@ export default function RetailPOSPage() {
         paymentMethod={paymentMethod}
         customerName={customerName}
         onNewTransaction={handleNewTransaction}
+        branchInfo={currentUser?.branches}
       />
     );
   }
@@ -251,27 +284,59 @@ export default function RetailPOSPage() {
             <>
               {/* Cart Items */}
               <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto">
-                {cart.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-white truncate">{item.name}</p>
-                      <p className="text-[10px] text-white/30 tabular-nums">{formatRupiah(item.sellPrice)}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 transition-colors">
-                        <span className="material-symbols-outlined text-[14px]">remove</span>
+                {cart.map((item, idx) => (
+                  <div key={`${item.id}-${idx}`} className="flex flex-col gap-2 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">{item.name}</p>
+                        <p className="text-[10px] text-white/30 tabular-nums">{formatRupiah(item.sellPrice)}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 transition-colors">
+                          <span className="material-symbols-outlined text-[14px]">remove</span>
+                        </button>
+                        <span className="text-xs font-bold text-white w-5 text-center tabular-nums">{item.qty}</span>
+                        <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 transition-colors">
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                        </button>
+                      </div>
+                      <p className="text-xs font-bold text-white tabular-nums w-20 text-right">
+                        {formatRupiah(item.sellPrice * item.qty)}
+                      </p>
+                      <button onClick={() => removeFromCart(item.id)} className="text-white/20 hover:text-red-400 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">close</span>
                       </button>
-                      <span className="text-xs font-bold text-white w-5 text-center tabular-nums">{item.qty}</span>
-                      <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 transition-colors">
-                        <span className="material-symbols-outlined text-[14px]">add</span>
-                      </button>
                     </div>
-                    <p className="text-xs font-bold text-white tabular-nums w-20 text-right">
-                      {formatRupiah(item.sellPrice * item.qty)}
-                    </p>
-                    <button onClick={() => removeFromCart(item.id)} className="text-white/20 hover:text-red-400 transition-colors">
-                      <span className="material-symbols-outlined text-[16px]">close</span>
-                    </button>
+
+                    {/* IMEI Section for HP */}
+                    {item.category === "HP" && (
+                      <div className="pl-1 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">IMEI ({item.selectedImeis?.length || 0}/{item.qty})</span>
+                          {(item.selectedImeis?.length || 0) < item.qty && (
+                            <button 
+                              onClick={() => setSelectingImeiItem({ productId: item.id, cartIdx: idx })}
+                              className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">qr_code_scanner</span>
+                              Pilih IMEI
+                            </button>
+                          )}
+                        </div>
+                        {item.selectedImeis && item.selectedImeis.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {item.selectedImeis.map(imei => (
+                              <div key={imei.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9px] text-indigo-300 font-mono">
+                                {imei.imei}
+                                <button onClick={() => removeImei(idx, imei.id)} className="hover:text-red-400">
+                                  <span className="material-symbols-outlined text-[10px]">close</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -305,7 +370,9 @@ export default function RetailPOSPage() {
                     value={discountPercent}
                     onChange={(e) => {
                       const val = e.target.value.replace(/[^\d.]/g, "");
-                      if (parseFloat(val) <= 1.5 || !val) setDiscountPercent(val);
+                      // Allow up to 10% discount for anyone for now, or use role-based limits
+                      const maxLimit = (currentUser?.role === 'owner') ? 1.5 : (currentUser?.role === 'manager' ? 1.0 : 0.5);
+                      if (parseFloat(val) <= maxLimit || !val) setDiscountPercent(val);
                     }}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/30">%</span>
@@ -380,6 +447,16 @@ export default function RetailPOSPage() {
           )}
         </div>
       </div>
+
+      {selectingImeiItem && (
+        <IMEISelector 
+          productId={selectingImeiItem.productId}
+          branchId={currentUser?.branch_id}
+          selectedImeis={cart[selectingImeiItem.cartIdx]?.selectedImeis || []}
+          onSelect={(imei) => selectImei(selectingImeiItem.productId, selectingImeiItem.cartIdx, imei)}
+          onClose={() => setSelectingImeiItem(null)}
+        />
+      )}
     </div>
   );
 }
@@ -387,10 +464,16 @@ export default function RetailPOSPage() {
 /* ============================
    RECEIPT VIEW
    ============================ */
-function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, customerName, onNewTransaction }) {
-  const pmLabels = { cash: "Cash", transfer: "Transfer Bank", qris: "QRIS" };
+function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, customerName, onNewTransaction, branchInfo }) {
+  const pmLabels = { cash: "Cash", transfer: "Transfer Bank", qris: "QRIS", card: "Credit / Debit" };
   const trxId = `TRX-${Date.now().toString(36).toUpperCase().slice(-6)}`;
   const now = new Date();
+
+  const handlePrint = () => {
+    // Basic window.print() is the most reliable way for POS receipts in browser
+    // It allows "Save as PDF" or direct thermal printer output
+    window.print();
+  };
 
   return (
     <div className="max-w-lg mx-auto flex flex-col gap-5 animate-fade-slide-up">
@@ -407,54 +490,60 @@ function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, cus
       </div>
 
       {/* Receipt Card */}
-      <div className="glass-card p-5 flex flex-col gap-3">
-        <div className="text-center border-b border-white/[0.06] pb-3">
-          <h3 className="text-sm font-bold text-white">LUMINA ERP</h3>
-          <p className="text-[10px] text-white/30 mt-0.5">Jl. Raya Utama No. 123, Jakarta</p>
-          <p className="text-[10px] text-white/20 mt-0.5">{now.toLocaleDateString("id-ID")} — {now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</p>
-          <p className="text-[10px] text-white/20 font-mono mt-1">{trxId}</p>
+      <div id="receipt-content" className="glass-card p-5 flex flex-col gap-3 print:bg-white print:text-black print:shadow-none print:border-none print:w-[80mm] print:mx-auto">
+        <div className="text-center border-b border-white/[0.06] print:border-black/10 pb-3">
+          <h3 className="text-sm font-bold text-white print:text-black uppercase">
+            {branchInfo?.name || "JT CELL GROUP"}
+          </h3>
+          <p className="text-[10px] text-white/30 print:text-black/60 mt-0.5">
+            {branchInfo?.address || "Jl. Raya Utama No. 123"}, {branchInfo?.city || "Indonesia"}
+          </p>
+          <p className="text-[10px] text-white/20 print:text-black/40 mt-0.5">{now.toLocaleDateString("id-ID")} — {now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</p>
+          <p className="text-[10px] text-white/20 print:text-black/40 font-mono mt-1">{trxId}</p>
         </div>
 
         {customerName && (
-          <p className="text-xs text-white/40">Customer: <span className="text-white">{customerName}</span></p>
+          <p className="text-xs text-white/40 print:text-black/60">Customer: <span className="text-white print:text-black">{customerName}</span></p>
         )}
 
         {/* Items */}
         <div className="flex flex-col gap-1">
           {cart.map((item) => (
             <div key={item.id} className="flex justify-between text-xs">
-              <span className="text-white/60">{item.name} × {item.qty}</span>
-              <span className="text-white tabular-nums">{formatRupiah(item.sellPrice * item.qty)}</span>
+              <span className="text-white/60 print:text-black/80">{item.name} × {item.qty}</span>
+              <span className="text-white print:text-black tabular-nums">{formatRupiah(item.sellPrice * item.qty)}</span>
             </div>
           ))}
         </div>
 
-        <div className="h-px bg-white/[0.06]" />
+        <div className="h-px bg-white/[0.06] print:bg-black/10" />
 
         <div className="flex justify-between text-xs">
-          <span className="text-white/40">Subtotal</span>
-          <span className="text-white tabular-nums">{formatRupiah(subtotal)}</span>
+          <span className="text-white/40 print:text-black/60">Subtotal</span>
+          <span className="text-white print:text-black tabular-nums">{formatRupiah(subtotal)}</span>
         </div>
         {discountAmount > 0 && (
           <div className="flex justify-between text-xs">
-            <span className="text-white/40">Diskon</span>
-            <span className="text-emerald-400 tabular-nums">- {formatRupiah(discountAmount)}</span>
+            <span className="text-white/40 print:text-black/60">Diskon</span>
+            <span className="text-emerald-400 print:text-black tabular-nums">- {formatRupiah(discountAmount)}</span>
           </div>
         )}
-        <div className="h-px bg-white/[0.06]" />
+        <div className="h-px bg-white/[0.06] print:bg-black/10" />
         <div className="flex justify-between">
-          <span className="text-sm font-bold text-white">TOTAL</span>
-          <span className="text-lg font-bold text-white tabular-nums">{formatRupiah(total)}</span>
+          <span className="text-sm font-bold text-white print:text-black">TOTAL</span>
+          <span className="text-lg font-bold text-white print:text-black tabular-nums">{formatRupiah(total)}</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-white/40">Metode Bayar</span>
-          <span className="text-white">{pmLabels[paymentMethod]}</span>
+          <span className="text-white/40 print:text-black/60">Metode Bayar</span>
+          <span className="text-white print:text-black">{pmLabels[paymentMethod]}</span>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3">
-        <button className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors active:scale-[0.97]">
+      <div className="flex gap-3 print:hidden">
+        <button 
+          onClick={handlePrint}
+          className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors active:scale-[0.97]"
+        >
           <span className="material-symbols-outlined text-[18px]">print</span>
           Cetak Nota
         </button>

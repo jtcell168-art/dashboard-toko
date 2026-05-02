@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { getInventory, addProduct, updateProduct, deleteProduct, updateProductPrice, getPriceHistory } from "@/app/actions/inventory";
+import { fixNokiaStock, migrateImeiStatus } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
 import { getBranches } from "@/app/actions/branches";
 import { exportToExcel } from "@/lib/utils/export";
@@ -306,6 +307,18 @@ export default function InventoryPage() {
               <span className="material-symbols-outlined text-[18px]">download</span>
               <span className="hidden sm:inline">Export Excel</span>
             </button>
+            <button 
+              onClick={async () => {
+                await migrateImeiStatus();
+                const res = await fixNokiaStock(currentUser?.branch_id || "all");
+                alert(res);
+                window.location.reload();
+              }}
+              className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm font-semibold flex items-center gap-2 hover:bg-amber-500/20 transition-all"
+            >
+              <span className="material-symbols-outlined text-[18px]">sync</span>
+              <span className="hidden sm:inline">Sinkronkan Stok</span>
+            </button>
             <button onClick={() => setShowAddForm(!showAddForm)} className="btn-gradient px-4 py-2.5 text-sm flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px]">{showAddForm ? "close" : "add"}</span>
               <span className="hidden sm:inline">{showAddForm ? "Batal" : "Tambah Produk"}</span>
@@ -492,12 +505,11 @@ export default function InventoryPage() {
           <button
             key={cat}
             onClick={() => setCategory(cat)}
-            className="px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200"
-            style={
-              category === cat
-                ? { background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white", boxShadow: "0 4px 12px rgba(99,102,241,0.25)" }
-                : { background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.06)" }
-            }
+            className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
+              category === cat 
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" 
+                : "bg-white/5 text-white/50 border border-white/5 hover:bg-white/10"
+            }`}
           >
             {cat}
           </button>

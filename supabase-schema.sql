@@ -17,9 +17,9 @@ CREATE TABLE branches (
 );
 
 INSERT INTO branches (name, city, address, phone) VALUES
-  ('JT CELL Ruteng - Pusat', 'Ruteng', 'Jl. Raya Ruteng No. 123', '0812-3456-7890'),
-  ('JT CELL Larantuka', 'Larantuka', 'Jl. Larantuka Utama No. 45', '0812-9876-5432'),
-  ('JT CELL Riung', 'Riung', 'Jl. Riung Indah No. 88', '0813-1111-2222');
+  ('JT CELL RUTENG', 'Ruteng', 'Jl. Raya Ruteng No. 123', '0812-3456-7890'),
+  ('JT CELL LARANTUKA', 'Larantuka', 'Jl. Larantuka Utama No. 45', '0812-9876-5432'),
+  ('JT CELL RIUNG', 'Riung', 'Jl. Riung Indah No. 88', '0813-1111-2222');
 
 -- ============================================
 -- 2. PROFILES (Users + Role)
@@ -155,7 +155,8 @@ CREATE TABLE transactions (
   discount_amount BIGINT DEFAULT 0,
   tax_amount BIGINT DEFAULT 0,
   total BIGINT NOT NULL DEFAULT 0,
-  payment_method TEXT CHECK (payment_method IN ('cash','transfer','qris','card')) DEFAULT 'cash',
+  payment_method TEXT CHECK (payment_method IN ('cash','transfer','qris','card','credit')) DEFAULT 'cash',
+  credit_provider TEXT,
   status TEXT CHECK (status IN ('completed','refunded','pending')) DEFAULT 'completed',
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
