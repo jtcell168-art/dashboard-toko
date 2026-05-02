@@ -215,29 +215,22 @@ export async function updateProduct(productId, productData, initialStockMap) {
     // Update or Insert Stok per Cabang
     if (initialStockMap) {
       for (const branchId of Object.keys(initialStockMap)) {
-        const qty = Number(initialStockMap[branchId]);
+        const qty = Number(initialStockMap[branchId] || 0);
         
-        // Cek apakah sudah ada baris stok untuk produk & cabang ini
-        const { data: existingStock } = await supabase
+        // Gunakan upsert untuk memastikan data masuk baik barisnya sudah ada atau belum
+        const { error: stockError } = await supabase
           .from("stock")
-          .select("id")
-          .eq("product_id", productId)
-          .eq("branch_id", branchId)
-          .maybeSingle();
+          .upsert({ 
+            product_id: productId, 
+            branch_id: branchId, 
+            quantity: qty,
+            updated_at: new Date().toISOString()
+          }, { 
+            onConflict: 'product_id,branch_id' 
+          });
 
-        if (existingStock) {
-          await supabase
-            .from("stock")
-            .update({ quantity: qty })
-            .eq("id", existingStock.id);
-        } else {
-          await supabase
-            .from("stock")
-            .insert({
-              product_id: productId,
-              branch_id: branchId,
-              quantity: qty
-            });
+        if (stockError) {
+          console.error(`Gagal update stok cabang ${branchId}:`, stockError);
         }
       }
     }
