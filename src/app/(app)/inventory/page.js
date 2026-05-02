@@ -328,18 +328,27 @@ export default function InventoryPage() {
           </label>
 
           <button 
-            onClick={() => exportToExcel(filtered.map(p => ({
-              Nama: p.name,
-              SKU: p.sku,
-              Kategori: p.category,
-              "Harga Beli": p.buyPrice,
-              "Harga Jual": p.sellPrice,
-              Total: Object.values(p.stocks).reduce((a,b) => a+b, 0)
-            })), "Data_Inventaris")}
+            onClick={() => exportToExcel(filtered.map(p => {
+              const rutengId = branches.find(b => b.name.toLowerCase().includes("ruteng"))?.id;
+              const laraId = branches.find(b => b.name.toLowerCase().includes("larantuka"))?.id;
+              const riungId = branches.find(b => b.name.toLowerCase().includes("riung"))?.id;
+
+              return {
+                Nama: p.name,
+                SKU: p.sku,
+                Kategori: p.category,
+                "Harga Beli": p.buyPrice,
+                "Harga Jual": p.sellPrice,
+                "Stok Ruteng": rutengId ? p.stocks[rutengId] : 0,
+                "Stok Larantuka": laraId ? p.stocks[laraId] : 0,
+                "Stok Riung": riungId ? p.stocks[riungId] : 0,
+                "Total Stok": Object.values(p.stocks).reduce((a,b) => a+b, 0)
+              };
+            }), "Template_Migrasi_Stok")}
             className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">download</span>
-            Export Excel
+            Download Template (Export)
           </button>
           
           <button 
