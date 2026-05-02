@@ -192,6 +192,7 @@ export async function getPnlData(selectedBranchId = "all") {
         .select(`
           quantity,
           subtotal,
+          purchase_price,
           products (purchase_price)
         `)
         .gte("created_at", startDate)
@@ -203,6 +204,7 @@ export async function getPnlData(selectedBranchId = "all") {
           .select(`
             quantity,
             subtotal,
+            purchase_price,
             transactions!inner(branch_id),
             products (purchase_price)
           `)
@@ -217,7 +219,11 @@ export async function getPnlData(selectedBranchId = "all") {
       let cogs = 0;
       (items || []).forEach(item => {
         revenue += Number(item.subtotal);
-        const pPrice = item.products?.purchase_price || 0;
+        // Prioritize purchase_price in transaction_items (for digital/manual)
+        // fallback to products.purchase_price (for retail)
+        const pPrice = item.purchase_price !== undefined && item.purchase_price !== null 
+          ? Number(item.purchase_price) 
+          : (item.products?.purchase_price || 0);
         cogs += pPrice * item.quantity;
       });
 

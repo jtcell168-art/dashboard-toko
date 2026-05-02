@@ -240,6 +240,68 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
   return transaction;
 }
 
+// Proses Transaksi Produk Digital
+export async function processDigitalTransaction(data) {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { phoneNumber, provider, note, costPrice, sellingPrice, branchId, tab } = data;
+
+  // 1. Insert Transaction
+  const { data: transaction, error: trxError } = await supabase
+    .from("transactions")
+    .insert({
+      invoice_no: `DIG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      type: "digital",
+      customer_name: phoneNumber, // Use phone as customer name if not provided
+      customer_phone: phoneNumber,
+      branch_id: branchId === "all" ? null : branchId,
+      cashier_id: user.id,
+      subtotal: Number(sellingPrice),
+      total: Number(sellingPrice),
+      payment_method: "cash", // Default to cash for digital
+      status: "completed",
+      notes: `${tab.toUpperCase()} - ${provider} - ${note}`
+    })
+    .select()
+    .single();
+
+  if (trxError) throw new Error(trxError.message);
+
+  // 2. Insert into transaction_items
+  const { error: itemError } = await supabase
+    .from("transaction_items")
+    .insert({
+      transaction_id: transaction.id,
+      product_name: `${provider} ${note}`,
+      quantity: 1,
+      unit_price: Number(sellingPrice),
+      purchase_price: Number(costPrice || 0), // Note: requires purchase_price column
+      subtotal: Number(sellingPrice)
+    });
+
+  if (itemError) {
+    console.warn("Item inserted but purchase_price might have failed if column doesn't exist:", itemError.message);
+    // Fallback if column doesn't exist yet: retry without purchase_price
+    if (itemError.message.includes('purchase_price')) {
+      await supabase
+        .from("transaction_items")
+        .insert({
+          transaction_id: transaction.id,
+          product_name: `${provider} ${note}`,
+          quantity: 1,
+          unit_price: Number(sellingPrice),
+          subtotal: Number(sellingPrice)
+        });
+    } else {
+      throw new Error(itemError.message);
+    }
+  }
+
+  return transaction;
+}
+
 // HAPUS TRANSAKSI (Hanya Owner)
 export async function deleteTransaction(transactionId) {
   const supabase = await createClient();
