@@ -94,13 +94,19 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
       </div>
 
       {/* Notifications */}
-      <button className="relative p-2 rounded-lg hover:bg-white/5 transition-colors">
+      <button 
+        className="relative p-2 rounded-lg hover:bg-white/5 transition-colors"
+        suppressHydrationWarning
+      >
         <span className="material-symbols-outlined text-[22px] text-white/60">notifications</span>
         <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-[#0A0E1A]" />
       </button>
 
       {/* User */}
-      <div className="flex items-center gap-3 pl-3 border-l border-white/[0.06]">
+      <div 
+        className="flex items-center gap-3 pl-3 border-l border-white/[0.06]"
+        suppressHydrationWarning
+      >
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold uppercase">
           {user?.full_name ? user.full_name[0] : "U"}
         </div>

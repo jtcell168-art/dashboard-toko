@@ -141,7 +141,7 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
 
         // Cek apakah sudah ada baris stok untuk produk & cabang ini
         const { data: existingStock } = await supabase
-          .from("product_stock")
+          .from("stock")
           .select("id, quantity")
           .eq("product_id", productId)
           .eq("branch_id", branchId)
@@ -150,13 +150,13 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
         if (existingStock) {
           // Tambahkan stok ke yang sudah ada
           await supabase
-            .from("product_stock")
+            .from("stock")
             .update({ quantity: (existingStock.quantity || 0) + qty })
             .eq("id", existingStock.id);
         } else {
           // Buat baris stok baru
           await supabase
-            .from("product_stock")
+            .from("stock")
             .insert({
               product_id: productId,
               branch_id: branchId,
@@ -184,7 +184,7 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
   }
 }
 
-export async function updateProduct(productId, productData) {
+export async function updateProduct(productId, productData, initialStockMap) {
   try {
     const supabase = await createClient();
     const user = await getCurrentUser();
@@ -211,6 +211,37 @@ export async function updateProduct(productId, productData) {
       .eq("id", productId);
 
     if (error) return { success: false, error: error.message };
+
+    // Update or Insert Stok per Cabang
+    if (initialStockMap) {
+      for (const branchId of Object.keys(initialStockMap)) {
+        const qty = Number(initialStockMap[branchId]);
+        
+        // Cek apakah sudah ada baris stok untuk produk & cabang ini
+        const { data: existingStock } = await supabase
+          .from("stock")
+          .select("id")
+          .eq("product_id", productId)
+          .eq("branch_id", branchId)
+          .maybeSingle();
+
+        if (existingStock) {
+          await supabase
+            .from("stock")
+            .update({ quantity: qty })
+            .eq("id", existingStock.id);
+        } else {
+          await supabase
+            .from("stock")
+            .insert({
+              product_id: productId,
+              branch_id: branchId,
+              quantity: qty
+            });
+        }
+      }
+    }
+
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };

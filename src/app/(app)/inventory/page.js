@@ -133,13 +133,17 @@ export default function InventoryPage() {
         else stockData[b.id] = 0;
       });
 
-      await addProduct({
-        ...addForm,
-        purchase_price: Number(addForm.buyPrice),
-        retail_price: Number(addForm.sellPrice),
-        stock: stockData,
-        imeis: imeiList
-      });
+      await addProduct(
+        {
+          name: addForm.name,
+          sku: addForm.sku,
+          category: addForm.category,
+          purchasePrice: Number(addForm.buyPrice),
+          retailPrice: Number(addForm.sellPrice),
+        },
+        stockData,
+        imeiList
+      );
       alert("Produk berhasil ditambah!");
       setShowAddForm(false);
       setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0" });
@@ -179,14 +183,16 @@ export default function InventoryPage() {
         else if (b.name.toLowerCase().includes("riung")) stockData[b.id] = Number(editForm.stockC);
       });
 
-      await updateProduct(editingId, {
-        name: editForm.name,
-        sku: editForm.sku,
-        category: editForm.category,
-        purchase_price: Number(editForm.buyPrice),
-        retail_price: Number(editForm.sellPrice),
-        stock: stockData
-      });
+      await updateProduct(editingId, 
+        {
+          name: editForm.name,
+          sku: editForm.sku,
+          category: editForm.category,
+          purchasePrice: Number(editForm.buyPrice),
+          retailPrice: Number(editForm.sellPrice),
+        },
+        stockData
+      );
       alert("Produk berhasil diupdate!");
       setEditingId(null);
       // Refresh
@@ -219,11 +225,12 @@ export default function InventoryPage() {
     if (!priceForm.reason) return alert("Alasan perubahan harga wajib diisi!");
     setIsUpdatingPrice(true);
     try {
-      await updateProductPrice(priceHistoryProduct.id, {
-        purchase_price: Number(priceForm.buyPrice),
-        retail_price: Number(priceForm.sellPrice),
-        reason: priceForm.reason
-      });
+      await updateProductPrice(
+        priceHistoryProduct.id, 
+        Number(priceForm.buyPrice), 
+        Number(priceForm.sellPrice), 
+        priceForm.reason
+      );
       alert("Harga berhasil diupdate!");
       setShowPriceModal(false);
       window.location.reload();
@@ -610,33 +617,88 @@ export default function InventoryPage() {
           </table>
         </div>
 
-        {/* Edit Modal (inline) */}
-        {editingId && editForm && (
-          <div className="p-5 border-t border-indigo-500/20 bg-indigo-500/[0.03] animate-fade-slide-up">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2"><span className="material-symbols-outlined text-[20px] text-indigo-400">edit</span><h3 className="text-sm font-semibold text-white">Edit Produk — {editForm.name}</h3></div>
-              <button onClick={cancelEdit} className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-white transition-colors"><span className="material-symbols-outlined text-[18px]">close</span></button>
+      {/* Edit Modal (Fixed Overlay) */}
+      {editingId && editForm && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={cancelEdit} />
+          <div className="glass-card w-full max-w-4xl max-h-[90vh] overflow-y-auto relative animate-scale-in p-6 border-indigo-500/30">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-indigo-400">edit_square</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Edit Produk</h3>
+                  <p className="text-xs text-white/40">{editForm.name} — {editForm.sku}</p>
+                </div>
+              </div>
+              <button onClick={cancelEdit} className="p-2 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className="flex flex-col gap-1 lg:col-span-2"><label className="text-[10px] text-white/30">Nama</label><input className="input-field text-sm" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} /></div>
-              <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">SKU</label><input className="input-field text-sm font-mono uppercase" value={editForm.sku} onChange={e => setEditForm({...editForm, sku: e.target.value.toUpperCase()})} /></div>
-              <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Kategori</label><select className="input-field text-sm" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}><option value="HP">HP</option><option value="Aksesori">Aksesori</option><option value="Sparepart">Sparepart</option></select></div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Nama Produk</label>
+                <input className="input-field" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">SKU / Kode</label>
+                <input className="input-field font-mono uppercase" value={editForm.sku} onChange={e => setEditForm({...editForm, sku: e.target.value.toUpperCase()})} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Kategori</label>
+                <select className="input-field" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}>
+                  <option value="HP">HP</option>
+                  <option value="Aksesori">Aksesori</option>
+                  <option value="Sparepart">Sparepart</option>
+                </select>
+              </div>
               {canSeeBuyPrice && (
-                <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Harga Beli</label><input className="input-field text-sm text-right tabular-nums" type="number" value={editForm.buyPrice} onChange={e => setEditForm({...editForm, buyPrice: e.target.value})} /></div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Harga Beli</label>
+                  <input className="input-field tabular-nums" type="number" value={editForm.buyPrice} onChange={e => setEditForm({...editForm, buyPrice: e.target.value})} />
+                </div>
               )}
-              <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Harga Jual</label><input className="input-field text-sm text-right tabular-nums" type="number" value={editForm.sellPrice} onChange={e => setEditForm({...editForm, sellPrice: e.target.value})} /></div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Harga Jual</label>
+                <input className="input-field tabular-nums font-bold text-indigo-400" type="number" value={editForm.sellPrice} onChange={e => setEditForm({...editForm, sellPrice: e.target.value})} />
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 mt-3 max-w-xs">
-              <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Ruteng</label><input className="input-field text-sm text-center" type="number" min="0" value={editForm.stockA} onChange={e => setEditForm({...editForm, stockA: e.target.value})} /></div>
-              <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Larantuka</label><input className="input-field text-sm text-center" type="number" min="0" value={editForm.stockB} onChange={e => setEditForm({...editForm, stockB: e.target.value})} /></div>
-              <div className="flex flex-col gap-1"><label className="text-[10px] text-white/30">Riung</label><input className="input-field text-sm text-center" type="number" min="0" value={editForm.stockC} onChange={e => setEditForm({...editForm, stockC: e.target.value})} /></div>
+
+            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
+              <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+                Update Stok per Cabang
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-white/30 uppercase">Ruteng</label>
+                  <input type="number" className="input-field text-center font-bold" min="0" value={editForm.stockA} onChange={e => setEditForm({...editForm, stockA: e.target.value})} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-white/30 uppercase">Larantuka</label>
+                  <input type="number" className="input-field text-center font-bold" min="0" value={editForm.stockB} onChange={e => setEditForm({...editForm, stockB: e.target.value})} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-white/30 uppercase">Riung</label>
+                  <input type="number" className="input-field text-center font-bold" min="0" value={editForm.stockC} onChange={e => setEditForm({...editForm, stockC: e.target.value})} />
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={cancelEdit} className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 transition-colors">Batal</button>
-              <button onClick={handleSaveEdit} className="btn-gradient px-6 py-2 text-sm flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">save</span>Simpan Perubahan</button>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+              <button onClick={cancelEdit} className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm font-bold hover:bg-white/10 transition-all">
+                Batal
+              </button>
+              <button onClick={handleSaveEdit} className="btn-gradient px-8 py-2.5 text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20">
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                Simpan Perubahan
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* Mobile List */}
         <div className="md:hidden divide-y divide-white/[0.04]">
