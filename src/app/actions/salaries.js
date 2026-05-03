@@ -37,12 +37,14 @@ export async function upsertSalary(payload) {
   return { success: true };
 }
 
-export async function getTotalSalaries(startDate, endDate) {
+export async function getTotalSalaries(startDate, endDate, branchId = null) {
   const supabase = await createClient();
-  let query = supabase.from("salaries").select("total_paid");
+  // Join with profiles to get the branch_id of the employee
+  let query = supabase.from("salaries").select("total_paid, profiles!inner(branch_id)");
   
   if (startDate) query = query.gte("paid_at", startDate);
   if (endDate) query = query.lte("paid_at", endDate);
+  if (branchId) query = query.eq("profiles.branch_id", branchId);
   
   const { data } = await query;
   return data?.reduce((sum, s) => sum + Number(s.total_paid), 0) || 0;

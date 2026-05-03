@@ -175,9 +175,10 @@ export async function getPnlData(selectedBranchId = "all", customStart, customEn
     const { data: user } = await supabase.from("profiles").select("*").eq("id", authUser.id).single();
     if (!user) return [];
 
-    const isOwner = user.role === "owner";
+    // Owner dan Manager boleh pilih cabang
+    const hasFullAccess = user.role === "owner" || user.role === "manager";
     const userBranchId = user.branch_id;
-    let targetBranchId = isOwner ? (selectedBranchId === "all" ? null : selectedBranchId) : userBranchId;
+    let targetBranchId = hasFullAccess ? (selectedBranchId === "all" ? null : selectedBranchId) : userBranchId;
 
     const results = [];
 
@@ -190,7 +191,6 @@ export async function getPnlData(selectedBranchId = "all", customStart, customEn
         const dateStr = current.toISOString().split('T')[0];
         const displayDate = current.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
         
-        // Gunakan format yang sama dengan dashboard.js
         const dayStart = dateStr;
         const dayEnd = dateStr + "T23:59:59";
 
@@ -227,7 +227,11 @@ export async function getPnlData(selectedBranchId = "all", customStart, customEn
         const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
 
         let salaries = 0;
-        try { if (user.role === "owner") salaries = await getTotalSalaries(dayStart, dayEnd); } catch(e) {}
+        try { 
+          if (hasFullAccess) {
+            salaries = await getTotalSalaries(dayStart, dayEnd, targetBranchId); 
+          }
+        } catch(e) {}
 
         results.push({
           label: displayDate,
@@ -286,7 +290,11 @@ export async function getPnlData(selectedBranchId = "all", customStart, customEn
         const expenses = (expensesList || []).reduce((sum, e) => sum + Number(e.amount), 0);
 
         let salaries = 0;
-        try { if (user.role === "owner") salaries = await getTotalSalaries(startStr, endStr); } catch(e) {}
+        try { 
+          if (hasFullAccess) {
+            salaries = await getTotalSalaries(startStr, endStr, targetBranchId); 
+          }
+        } catch(e) {}
 
         results.push({
           label,

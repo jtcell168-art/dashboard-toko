@@ -69,7 +69,7 @@ const MENU = [
       { label: "Laba Rugi", href: "/reports/pnl" },
       { label: "Laporan Transaksi", href: "/reports/transactions" },
       { label: "Performa Produk", href: "/reports/products" },
-      { label: "Produktivitas Servis", href: "/reports/service" },
+      { label: "Produktivitas Servis", href: "/reports/servis" },
       { label: "Laporan Kasbon", href: "/reports/kasbon" },
       { label: "Laporan Cicilan", href: "/reports/cicilan" },
     ],
@@ -107,11 +107,7 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
         }
         return null;
       }
-      if (role === "manager") {
-        if (item.label === "Laporan") {
-          return { ...item, children: item.children.filter(c => c.label !== "Laba Rugi") };
-        }
-      }
+
       if (role === "kasir") {
         if (item.label === "Pengaturan") return null;
         if (item.label === "Purchase Order") return null;

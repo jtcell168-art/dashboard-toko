@@ -1,14 +1,18 @@
 import MainLayout from "@/components/layout/MainLayout";
+import { getCurrentUser } from "@/app/actions/auth";
 
-export default function MorePage() {
+export default async function MorePage() {
+  const user = await getCurrentUser();
   return (
-    <MainLayout>
-      <MorePageContent />
+    <MainLayout user={user}>
+      <MorePageContent user={user} />
     </MainLayout>
   );
 }
 
-function MorePageContent() {
+function MorePageContent({ user }) {
+  const role = user?.role || "kasir";
+
   const sections = [
     {
       title: "Keuangan",
@@ -42,7 +46,7 @@ function MorePageContent() {
       items: [
         { label: "Laba Rugi", href: "/reports/pnl", icon: "analytics" },
         { label: "Performa Produk", href: "/reports/products", icon: "bar_chart" },
-        { label: "Produktivitas Servis", href: "/reports/service", icon: "engineering" },
+        { label: "Produktivitas Servis", href: "/reports/servis", icon: "engineering" },
         { label: "Laporan Kasbon", href: "/reports/kasbon", icon: "summarize" },
         { label: "Laporan Cicilan", href: "/reports/cicilan", icon: "trending_up" },
       ],
@@ -58,14 +62,42 @@ function MorePageContent() {
     },
   ];
 
+  // Filter sections based on role
+  const filteredSections = sections.map(section => {
+    let items = section.items;
+
+    if (role === "teknisi") {
+      return null; // Teknisi might not need this page at all or only very limited
+    }
+
+    if (role === "kasir") {
+      if (section.title === "Pengaturan") return null;
+      if (section.title === "Purchase Order") return null;
+      if (section.title === "Keuangan") {
+        items = items.filter(i => ["Kasbon Karyawan", "Cicilan"].includes(i.label));
+      }
+      if (section.title === "Laporan") {
+        items = items.filter(i => ["Produktivitas Servis", "Laporan Kasbon", "Laporan Cicilan"].includes(i.label));
+      }
+    }
+
+    // Role-based filtering for Laba Rugi (Only Owner & Manager)
+    if (!["owner", "manager"].includes(role)) {
+      items = items.filter(i => i.label !== "Laba Rugi");
+    }
+
+    if (items.length === 0) return null;
+    return { ...section, items };
+  }).filter(Boolean);
+
   return (
     <div className="flex flex-col gap-5 max-w-2xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-white">Menu Lainnya</h1>
-        <p className="text-sm text-white/40 mt-0.5">Akses semua fitur</p>
+        <p className="text-sm text-white/40 mt-0.5">Akses semua fitur sesuai hak akses Anda</p>
       </div>
 
-      {sections.map((section) => (
+      {filteredSections.map((section) => (
         <div key={section.title} className="glass-card overflow-hidden">
           <div className="px-4 py-3 border-b border-white/[0.04] flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px] text-indigo-400">{section.icon}</span>
@@ -89,3 +121,4 @@ function MorePageContent() {
     </div>
   );
 }
+

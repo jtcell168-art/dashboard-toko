@@ -40,7 +40,7 @@ export default function PnLReportPage() {
 
   if (!branchIsMounted) return null;
 
-  if (currentUser && ["manager", "kasir"].includes(currentUser.role)) {
+  if (currentUser && !["owner", "manager"].includes(currentUser.role)) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center">
         <span className="material-symbols-outlined text-6xl text-white/10 mb-4">lock</span>

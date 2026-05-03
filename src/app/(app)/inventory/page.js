@@ -305,13 +305,15 @@ export default function InventoryPage() {
   return (
     <div className="flex flex-col gap-6 stagger-children">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-white">Inventaris</h1>
-          <p className="text-sm text-white/40 mt-1">Manajemen stok produk — {selectedBranch === 'all' ? 'Semua Cabang' : branches.find(b => b.id === selectedBranch)?.name}</p>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Inventaris</h1>
+          <p className="text-xs md:text-sm text-white/40">
+            {selectedBranch === 'all' ? 'Semua Cabang' : branches.find(b => b.id === selectedBranch)?.name} — {dbProducts.length} Produk
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input 
             type="file" 
             id="excel-import" 
@@ -321,10 +323,11 @@ export default function InventoryPage() {
           />
           <label 
             htmlFor="excel-import"
-            className={`px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all cursor-pointer ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`flex-1 sm:flex-none px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-white/10 transition-all cursor-pointer ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <span className="material-symbols-outlined text-[18px]">upload_file</span>
-            {isImporting ? "Mengimpor..." : "Import Excel"}
+            <span className="hidden sm:inline">{isImporting ? "Mengimpor..." : "Import Excel"}</span>
+            <span className="sm:hidden">Import</span>
           </label>
 
           <button 
@@ -345,27 +348,29 @@ export default function InventoryPage() {
                 "Total Stok": Object.values(p.stocks).reduce((a,b) => a+b, 0)
               };
             }), "Template_Migrasi_Stok")}
-            className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
+            className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-white/10 transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">download</span>
-            Download Template (Export)
+            <span className="hidden sm:inline">Download Template</span>
+            <span className="sm:hidden">Template</span>
           </button>
           
           <button 
             onClick={() => window.location.reload()}
-            className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm font-semibold flex items-center gap-2 hover:bg-amber-500/20 transition-all"
+            className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-white/10 transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">sync</span>
-            Sinkronkan Stok
+            <span className="hidden sm:inline">Sinkronkan</span>
+            <span className="sm:hidden">Sync</span>
           </button>
 
           {hasAccess && (
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="btn-gradient px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2"
+              className="flex-1 sm:flex-none btn-gradient px-4 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20"
             >
-              <span className="material-symbols-outlined text-[20px]">add</span>
-              Tambah Produk
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Tambah
             </button>
           )}
         </div>
@@ -556,35 +561,35 @@ export default function InventoryPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="kpi-card indigo" style={{ padding: 16 }}>
-          <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Unit</p>
-          <p className="text-2xl font-bold text-white tabular-nums">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="kpi-card indigo" style={{ padding: 12 }}>
+          <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Unit</p>
+          <p className="text-xl font-bold text-white tabular-nums">
             <DynamicValue isMounted={isMounted}>
               {filtered.reduce((sum, p) => sum + Object.values(p.stocks).reduce((a,b)=>a+b,0), 0)}
             </DynamicValue>
           </p>
         </div>
-        <div className="kpi-card rose" style={{ padding: 16 }}>
-          <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Stok Menipis</p>
-          <div className="flex items-center gap-2">
-            <p className="text-2xl font-bold text-red-400 tabular-nums">
+        <div className="kpi-card rose" style={{ padding: 12 }}>
+          <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-1">Stok Menipis</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xl font-bold text-red-400 tabular-nums">
               <DynamicValue isMounted={isMounted}>
                 {lowStockItems.length}
               </DynamicValue>
             </p>
-            <span className="badge danger">Perlu restock</span>
+            <span className="text-[8px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded uppercase font-bold">Alert</span>
           </div>
         </div>
-        <div className="kpi-card emerald hidden lg:block" style={{ padding: 16 }}>
-          <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Kategori HP</p>
-          <p className="text-2xl font-bold text-white tabular-nums">
+        <div className="kpi-card emerald" style={{ padding: 12 }}>
+          <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-1">Kategori HP</p>
+          <p className="text-xl font-bold text-white tabular-nums">
             {dbProducts.filter((p) => p.category === "HP").length}
           </p>
         </div>
-        <div className="kpi-card blue hidden lg:block" style={{ padding: 16 }}>
-          <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Aksesori & Part</p>
-          <p className="text-2xl font-bold text-white tabular-nums">
+        <div className="kpi-card blue" style={{ padding: 12 }}>
+          <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-1">Lainnya</p>
+          <p className="text-xl font-bold text-white tabular-nums">
             {dbProducts.filter((p) => p.category !== "HP").length}
           </p>
         </div>
@@ -694,7 +699,7 @@ export default function InventoryPage() {
       {editingId && editForm && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={cancelEdit} />
-          <div className="glass-card w-full max-w-4xl max-h-[90vh] overflow-y-auto relative animate-scale-in p-6 border-indigo-500/30">
+          <div className="glass-card w-full max-w-4xl max-h-[90vh] overflow-y-auto relative animate-scale-in p-4 sm:p-6 border-indigo-500/30">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
@@ -773,33 +778,74 @@ export default function InventoryPage() {
         </div>
       )}
 
-        {/* Mobile List */}
-        <div className="md:hidden divide-y divide-white/[0.04]">
-          {filtered.map((product) => {
-            const total = Object.values(product.stocks || {}).reduce((a, b) => a + b, 0);
-            return (
-              <div key={product.id} className="px-4 py-3.5 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{product.name}</p>
-                  <p className="text-[10px] text-white/30 mt-0.5 font-mono">{product.sku} · {product.category}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="flex items-center gap-1.5 justify-end">
-                    {hasAccess ? (
-                      branches.map(b => (
-                        <StockBadge key={b.id} count={product.stocks?.[b.id] || 0} label={b.name.substring(0, 1)} />
-                      ))
-                    ) : (
-                      <StockBadge count={product.stocks?.[currentUser?.branch_id] || 0} label="Stok" />
-                    )}
+        <div className="md:hidden flex flex-col gap-3 p-4">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12">
+              <span className="material-symbols-outlined text-4xl text-white/10 mb-2">inventory_2</span>
+              <p className="text-sm text-white/30">Tidak ada produk ditemukan</p>
+            </div>
+          ) : (
+            filtered.map((product) => {
+              const total = Object.values(product.stocks || {}).reduce((a, b) => a + b, 0);
+              const isLow = total < 5;
+              
+              return (
+                <div key={product.id} className="glass-card p-4 flex flex-col gap-4 border-white/5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`w-2 h-2 rounded-full ${isLow ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                        <p className="text-sm font-bold text-white leading-tight">{product.name}</p>
+                      </div>
+                      <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider">{product.sku} · {product.category}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-indigo-400">{product.sellPrice > 0 ? formatRupiah(product.sellPrice) : "Internal"}</p>
+                      {canSeeBuyPrice && product.buyPrice > 0 && (
+                        <p className="text-[9px] text-white/20 mt-0.5">Beli: {formatRupiah(product.buyPrice)}</p>
+                      )}
+                    </div>
                   </div>
-                  {product.sellPrice > 0 && (
-                    <p className="text-[11px] text-white/50 mt-1 tabular-nums">{formatRupiah(product.sellPrice)}</p>
+
+                  <div className="flex items-center justify-between bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {hasAccess ? (
+                        branches.map(b => (
+                          <StockBadge key={b.id} count={product.stocks?.[b.id] || 0} label={b.name.split(' ')[2]?.substring(0, 1) || b.name.substring(0, 1)} />
+                        ))
+                      ) : (
+                        <StockBadge count={product.stocks?.[currentUser?.branch_id] || 0} label="Stok" />
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-white/30 uppercase font-bold">Total</p>
+                      <p className={`text-sm font-bold ${isLow ? 'text-red-400' : 'text-white'}`}>{total}</p>
+                    </div>
+                  </div>
+
+                  {hasAccess && (
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => startEdit(product)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all">
+                          <span className="material-symbols-outlined text-[20px]">edit</span>
+                        </button>
+                        <button onClick={() => handleOpenPriceModal(product)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white/40 hover:text-emerald-400 hover:bg-white/10 transition-all">
+                          <span className="material-symbols-outlined text-[20px]">payments</span>
+                        </button>
+                        <button className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white/40 hover:text-indigo-400 hover:bg-white/10 transition-all">
+                          <span className="material-symbols-outlined text-[20px]">swap_horiz</span>
+                        </button>
+                      </div>
+                      <button onClick={() => handleDelete(product.id)} className="px-3 h-9 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 text-[10px] font-bold gap-1.5 active:bg-red-500/20">
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                        Hapus
+                      </button>
+                    </div>
                   )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
         {/* Footer */}
