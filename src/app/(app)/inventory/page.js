@@ -168,7 +168,9 @@ export default function InventoryPage() {
   }, [dbProducts, category, search, sortBy]);
 
   const lowStockItems = dbProducts.filter((p) => {
-    const total = Object.values(p.stocks).reduce((sum, s) => sum + s, 0);
+    const total = selectedBranch === "all" 
+      ? Object.values(p.stocks).reduce((sum, s) => sum + s, 0)
+      : p.stocks[selectedBranch] || 0;
     return total < 5;
   });
 
@@ -566,7 +568,12 @@ export default function InventoryPage() {
           <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Unit</p>
           <p className="text-xl font-bold text-white tabular-nums">
             <DynamicValue isMounted={isMounted}>
-              {filtered.reduce((sum, p) => sum + Object.values(p.stocks).reduce((a,b)=>a+b,0), 0)}
+              {filtered.reduce((sum, p) => {
+                const stock = selectedBranch === "all" 
+                  ? Object.values(p.stocks).reduce((a,b)=>a+b,0)
+                  : p.stocks[selectedBranch] || 0;
+                return sum + stock;
+              }, 0)}
             </DynamicValue>
           </p>
         </div>
@@ -623,7 +630,9 @@ export default function InventoryPage() {
             </thead>
             <tbody>
               {filtered.map((product) => {
-                const total = Object.values(product.stocks || {}).reduce((a, b) => a + b, 0);
+                const total = selectedBranch === "all"
+                  ? Object.values(product.stocks || {}).reduce((a, b) => a + b, 0)
+                  : product.stocks?.[selectedBranch] || 0;
                 const isLow = total < 5;
                 return (
                   <tr key={product.id}>
@@ -786,7 +795,9 @@ export default function InventoryPage() {
             </div>
           ) : (
             filtered.map((product) => {
-              const total = Object.values(product.stocks || {}).reduce((a, b) => a + b, 0);
+              const total = selectedBranch === "all"
+                ? Object.values(product.stocks || {}).reduce((a, b) => a + b, 0)
+                : product.stocks?.[selectedBranch] || 0;
               const isLow = total < 5;
               
               return (
@@ -818,7 +829,7 @@ export default function InventoryPage() {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-white/30 uppercase font-bold">Total</p>
+                      <p className="text-[10px] text-white/30 uppercase font-bold">{selectedBranch === "all" ? "Total" : "Stok"}</p>
                       <p className={`text-sm font-bold ${isLow ? 'text-red-400' : 'text-white'}`}>{total}</p>
                     </div>
                   </div>
