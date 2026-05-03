@@ -59,6 +59,7 @@ const MENU = [
       { label: "Hutang Dagang", href: "/finance/payables" },
       { label: "Kasbon Karyawan", href: "/finance/kasbon" },
       { label: "Cicilan", href: "/finance/cicilan" },
+      { label: "Manajemen Aset", href: "/finance/assets" },
     ],
   },
   {
