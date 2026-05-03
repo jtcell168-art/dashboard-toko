@@ -3,11 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 
 // Helper to get current user info
 async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase.from("profiles").select("role, branch_id").eq("id", user.id).single();
-  return { ...user, ...profile };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await supabase.from("profiles").select("role, branch_id").eq("id", user.id).maybeSingle();
+    return { ...user, ...(profile || {}) };
+  } catch (err) {
+    console.error("Error in pos getCurrentUser:", err);
+    return null;
+  }
 }
 
 // Ambil produk untuk POS
@@ -248,6 +253,8 @@ export async function processDigitalTransaction(data) {
 
   const { phoneNumber, provider, note, costPrice, sellingPrice, branchId, tab } = data;
 
+  const sPrice = Math.round(Number(sellingPrice || 0));
+
   // 1. Insert Transaction
   const { data: transaction, error: trxError } = await supabase
     .from("transactions")
@@ -256,18 +263,20 @@ export async function processDigitalTransaction(data) {
       type: "digital",
       customer_name: phoneNumber, 
       customer_phone: phoneNumber,
-      branch_id: user.role === 'owner' ? (branchId === "all" ? null : branchId) : user.branch_id,
+      branch_id: (user.role === 'owner' || user.role === 'manager') ? (branchId === "all" ? null : branchId) : (user.branch_id || (branchId === "all" ? null : branchId)),
       cashier_id: user.id,
-      subtotal: Number(sellingPrice),
-      total: Number(sellingPrice),
+      subtotal: sPrice,
+      total: sPrice,
       payment_method: "cash", 
       status: "completed",
-      notes: `${tab.toUpperCase()} - ${provider} - ${note}`
+      notes: `${tab ? tab.toUpperCase() : 'DIGITAL'} - ${provider} - ${note}`
     })
     .select()
     .single();
 
   if (trxError) throw new Error(trxError.message);
+
+  const cPrice = Math.round(Number(costPrice || 0));
 
   // 2. Insert into transaction_items
   const { error: itemError } = await supabase
@@ -276,27 +285,25 @@ export async function processDigitalTransaction(data) {
       transaction_id: transaction.id,
       product_name: `${provider} ${note}`,
       quantity: 1,
-      unit_price: Number(sellingPrice),
-      purchase_price: Number(costPrice || 0), // Note: requires purchase_price column
-      subtotal: Number(sellingPrice)
+      unit_price: sPrice,
+      purchase_price: cPrice, // Note: requires purchase_price column
+      subtotal: sPrice
     });
 
   if (itemError) {
-    console.warn("Item inserted but purchase_price might have failed if column doesn't exist:", itemError.message);
-    // Fallback if column doesn't exist yet: retry without purchase_price
-    if (itemError.message.includes('purchase_price')) {
-      await supabase
-        .from("transaction_items")
-        .insert({
-          transaction_id: transaction.id,
-          product_name: `${provider} ${note}`,
-          quantity: 1,
-          unit_price: Number(sellingPrice),
-          subtotal: Number(sellingPrice)
-        });
-    } else {
-      throw new Error(itemError.message);
-    }
+    console.warn("Item insert error, trying fallback:", itemError.message);
+    // Fallback if purchase_price column doesn't exist yet
+    const { error: fallbackError } = await supabase
+      .from("transaction_items")
+      .insert({
+        transaction_id: transaction.id,
+        product_name: `${provider} ${note}`,
+        quantity: 1,
+        unit_price: sPrice,
+        subtotal: sPrice
+      });
+    
+    if (fallbackError) throw new Error(fallbackError.message);
   }
 
   return transaction;

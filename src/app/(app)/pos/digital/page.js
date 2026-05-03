@@ -23,6 +23,7 @@ export default function DigitalProductsPage() {
   const [note, setNote] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
+  const [isCustomProvider, setIsCustomProvider] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleBuy = async () => { 
@@ -46,6 +47,7 @@ export default function DigitalProductsPage() {
       alert(`Transaksi ${provider} ${note} berhasil disimpan!`); 
       setPhoneNumber(""); 
       setProvider(PROVIDERS[tab][0] || "");
+      setIsCustomProvider(false);
       setNote("");
       setCostPrice("");
       setSellingPrice("");
@@ -61,7 +63,7 @@ export default function DigitalProductsPage() {
     <div className="flex flex-col gap-5 max-w-3xl">
       <div><h1 className="text-xl md:text-2xl font-bold text-white">Produk Digital</h1><p className="text-sm text-white/40 mt-0.5">Pulsa, paket data, e-wallet, dan listrik</p></div>
 
-      <div className="flex gap-2 mb-2">{TABS.map(t => (<button key={t} onClick={() => { setTab(t); setProvider(PROVIDERS[t][0] || ""); setNote(""); setCostPrice(""); setSellingPrice(""); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all" style={tab === t ? { background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white" } : { background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.06)" }}><span className="material-symbols-outlined text-[18px]">{TAB_ICONS[t]}</span>{TAB_LABELS[t]}</button>))}</div>
+      <div className="flex gap-2 mb-2">{TABS.map(t => (<button key={t} onClick={() => { setTab(t); setProvider(PROVIDERS[t][0] || ""); setIsCustomProvider(false); setNote(""); setCostPrice(""); setSellingPrice(""); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all" style={tab === t ? { background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white" } : { background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.06)" }}><span className="material-symbols-outlined text-[18px]">{TAB_ICONS[t]}</span>{TAB_LABELS[t]}</button>))}</div>
 
       <div className="glass-card p-6 flex flex-col gap-5">
         <div className="space-y-4">
@@ -80,19 +82,32 @@ export default function DigitalProductsPage() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[20px] text-white/30">category</span>
                 <select 
                   className="input-field pl-10 appearance-none bg-[#0F172A]" 
-                  value={provider} 
-                  onChange={e => setProvider(e.target.value)}
+                  value={isCustomProvider ? "Lainnya" : provider} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === "Lainnya") {
+                      setIsCustomProvider(true);
+                      setProvider("");
+                    } else {
+                      setIsCustomProvider(false);
+                      setProvider(val);
+                    }
+                  }}
                 >
                   <option value="">Pilih Provider</option>
                   {PROVIDERS[tab].map(p => <option key={p} value={p}>{p}</option>)}
                   <option value="Lainnya">Lainnya...</option>
                 </select>
-                {provider === "Lainnya" && (
-                  <input 
-                    className="input-field mt-2" 
-                    placeholder="Masukkan nama provider manual..." 
-                    onChange={e => setProvider(e.target.value)} 
-                  />
+                {isCustomProvider && (
+                  <div className="mt-2 relative animate-fade-in">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-white/30">edit</span>
+                    <input 
+                      className="input-field pl-10" 
+                      placeholder="Masukkan nama provider manual..." 
+                      value={provider}
+                      onChange={e => setProvider(e.target.value)} 
+                    />
+                  </div>
                 )}
               </div>
             </div>
