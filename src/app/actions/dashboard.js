@@ -166,7 +166,18 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       }
     }
 
-    // 10. Revenue by Branch
+    // 10. Calculate Fixed Asset Value (Owner only)
+    let assetValue = 0;
+    if (isOwner) {
+      let assetQuery = supabase.from("assets").select("purchase_price");
+      if (targetBranchId) assetQuery.eq("branch_id", targetBranchId);
+      const { data: assetData } = await assetQuery;
+      if (assetData) {
+        assetValue = assetData.reduce((sum, a) => sum + Number(a.purchase_price), 0);
+      }
+    }
+
+    // 11. Revenue by Branch
     const branchRevenueQuery = supabase
       .from("transactions")
       .select(`
@@ -220,6 +231,7 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
         activeServices,
         totalSalary: totalSalary,
         inventoryValue: inventoryValue,
+        assetValue: assetValue,
         myKasbon: myKasbonBalance
       },
       recentTransactions: recentTransactions || [],

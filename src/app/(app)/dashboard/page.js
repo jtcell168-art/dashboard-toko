@@ -364,7 +364,7 @@ export default function DashboardPage() {
 
       {/* KPI Cards */}
       <div 
-        className={`grid grid-cols-2 md:grid-cols-3 ${data.userRole === 'owner' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}
+        className={`grid grid-cols-2 md:grid-cols-3 ${data.userRole === 'owner' ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} gap-4`}
         suppressHydrationWarning
       >
         <KPICard
@@ -394,6 +394,17 @@ export default function DashboardPage() {
             subValue="Total aset stok (harga beli)"
             accentClass="violet"
             href="/inventory"
+          />
+        )}
+        {data.userRole === "owner" && (
+          <KPICard
+            icon="account_balance_wallet"
+            iconColor="#EC4899"
+            title="Nominal Aset"
+            value={formatRupiah(data.kpi.assetValue)}
+            subValue="Total investasi aset tetap"
+            accentClass="rose"
+            href="/finance/assets"
           />
         )}
         <KPICard
