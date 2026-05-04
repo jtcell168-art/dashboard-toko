@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { getAssets, addAsset, deleteAsset, getAssetStats } from "@/app/actions/assets";
+import { getBranches } from "@/app/actions/branches";
 import { useBranch } from "@/context/BranchContext";
 import { formatRupiah } from "@/data/mockData";
 
@@ -10,6 +11,7 @@ const CATEGORIES = ["Elektronik", "Furniture", "Bangunan", "Kendaraan", "Lainnya
 export default function AssetsPage() {
   const { selectedBranch, isMounted } = useBranch();
   const [assets, setAssets] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [stats, setStats] = useState({ totalInvestment: 0, assetCount: 0 });
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -33,12 +35,14 @@ export default function AssetsPage() {
 
   async function loadData() {
     setLoading(true);
-    const [assetsData, statsData] = await Promise.all([
+    const [assetsData, statsData, branchesData] = await Promise.all([
       getAssets(selectedBranch),
-      getAssetStats(selectedBranch)
+      getAssetStats(selectedBranch),
+      getBranches()
     ]);
     setAssets(assetsData);
     setStats(statsData);
+    setBranches(branchesData);
     setLoading(false);
   }
 
@@ -211,16 +215,32 @@ export default function AssetsPage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-white/40 ml-1">Harga Beli (Rp)</label>
-                <input 
-                  required
-                  type="number"
-                  className="input-field font-mono"
-                  placeholder="Masukkan nominal..."
-                  value={formData.purchasePrice}
-                  onChange={e => setFormData({...formData, purchasePrice: e.target.value})}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-white/40 ml-1">Cabang</label>
+                  <select 
+                    className="input-field"
+                    value={selectedBranch !== "all" ? selectedBranch : formData.branchId}
+                    onChange={e => setFormData({...formData, branchId: e.target.value})}
+                    disabled={selectedBranch !== "all"}
+                  >
+                    <option value="all">Semua Cabang</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-white/40 ml-1">Harga Beli (Rp)</label>
+                  <input 
+                    required
+                    type="number"
+                    className="input-field font-mono"
+                    placeholder="Masukkan nominal..."
+                    value={formData.purchasePrice}
+                    onChange={e => setFormData({...formData, purchasePrice: e.target.value})}
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">
