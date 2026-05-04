@@ -36,7 +36,8 @@ export async function addAsset(assetData) {
       purchase_date: assetData.purchaseDate || new Date().toISOString().split('T')[0],
       purchase_price: Number(assetData.purchasePrice),
       branch_id: assetData.branchId === "all" ? null : assetData.branchId,
-      note: assetData.note
+      note: assetData.note,
+      image_url: assetData.imageUrl // Tambahkan ini
     });
 
     if (error) throw error;

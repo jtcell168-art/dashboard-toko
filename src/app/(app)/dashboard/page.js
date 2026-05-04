@@ -11,6 +11,9 @@ import { getDashboardData } from "@/app/actions/dashboard";
 import { getEmployees } from "@/app/actions/salaries";
 import { sendNotification } from "@/app/actions/notifications";
 import { useBranch } from "@/context/BranchContext";
+import { upsertSalary } from "@/app/actions/salaries"; // Import missing action
+import ImageUpload from "@/components/ImageUpload";
+import Payslip from "@/components/finance/Payslip"; // Tambahkan ini
 
 /* ============================
    KPI CARDS
@@ -211,8 +214,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
   const [showSalaryForm, setShowSalaryForm] = useState(false);
-  const [salaryForm, setSalaryForm] = useState({ profile_id: "", base_salary: "", bonus: "", notes: "" });
+  const [salaryForm, setSalaryForm] = useState({ profile_id: "", custom_name: "", base_salary: "", bonus: "", notes: "", image_url: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSlip, setShowSlip] = useState(false);
+  const [lastSalaryData, setLastSalaryData] = useState(null);
 
   // Messaging state
   const [showMsgModal, setShowMsgModal] = useState(false);
@@ -260,10 +265,19 @@ export default function DashboardPage() {
         base_salary: Number(salaryForm.base_salary),
         bonus: Number(salaryForm.bonus || 0)
       });
+
+      const employee = employees.find(e => e.id === salaryForm.profile_id);
+      setLastSalaryData({
+        ...salaryForm,
+        employee_name: salaryForm.custom_name || employee?.full_name || 'Karyawan',
+        employee_role: employee?.role || '-'
+      });
+
       alert("Gaji berhasil disimpan!");
       setShowSalaryForm(false);
-      setSalaryForm({ profile_id: "", base_salary: "", bonus: "", notes: "" });
-      // Refresh dashboard data
+      setSalaryForm({ profile_id: "", custom_name: "", base_salary: "", bonus: "", notes: "", image_url: "" });
+      setShowSlip(true);
+      
       const dbData = await getDashboardData(startDate, endDate, selectedBranch);
       setData(dbData);
     } catch (err) {
@@ -444,19 +458,30 @@ export default function DashboardPage() {
           </div>
 
           {showSalaryForm && (
-            <form onSubmit={handleSalarySubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <form onSubmit={handleSalarySubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Pegawai</label>
+                <label className="text-[10px] text-white/40 uppercase font-bold">Pilih Akun (Sistem)</label>
                 <select 
                   className="input-field text-sm"
                   value={salaryForm.profile_id}
                   onChange={e => setSalaryForm({...salaryForm, profile_id: e.target.value})}
                 >
-                  <option value="">-- Pilih Pegawai --</option>
+                  <option value="">-- Pilih --</option>
                   {employees.map(emp => (
                     <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.role})</option>
                   ))}
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Nama Lengkap (Manual)</label>
+                <input 
+                  type="text" 
+                  className="input-field text-sm"
+                  placeholder="Nama di Slip Gaji"
+                  value={salaryForm.custom_name}
+                  onChange={e => setSalaryForm({...salaryForm, custom_name: e.target.value})}
+                  required
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-white/40 uppercase font-bold">Gaji Pokok (Rp)</label>
@@ -486,6 +511,12 @@ export default function DashboardPage() {
                   placeholder="e.g. Gaji April 2026"
                   value={salaryForm.notes}
                   onChange={e => setSalaryForm({...salaryForm, notes: e.target.value})}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <ImageUpload 
+                  onUploadComplete={(url) => setSalaryForm({ ...salaryForm, image_url: url })} 
+                  label="Bukti Transfer"
                 />
               </div>
               <div className="flex items-end">
@@ -575,6 +606,14 @@ export default function DashboardPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Payslip Preview Modal */}
+      {showSlip && (
+        <Payslip 
+          data={lastSalaryData} 
+          onClose={() => setShowSlip(false)} 
+        />
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import { getAssets, addAsset, deleteAsset, getAssetStats } from "@/app/actions/a
 import { getBranches } from "@/app/actions/branches";
 import { useBranch } from "@/context/BranchContext";
 import { formatRupiah } from "@/data/mockData";
+import ImageUpload from "@/components/ImageUpload";
 
 const CATEGORIES = ["Elektronik", "Furniture", "Bangunan", "Kendaraan", "Lainnya"];
 
@@ -24,7 +25,8 @@ export default function AssetsPage() {
     purchasePrice: "",
     purchaseDate: new Date().toISOString().split('T')[0],
     note: "",
-    branchId: "all"
+    branchId: "all",
+    imageUrl: ""
   });
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function AssetsPage() {
     
     if (res.success) {
       setShowAddModal(false);
-      setFormData({ name: "", category: "Elektronik", purchasePrice: "", purchaseDate: new Date().toISOString().split('T')[0], note: "", branchId: "all" });
+      setFormData({ name: "", category: "Elektronik", purchasePrice: "", purchaseDate: new Date().toISOString().split('T')[0], note: "", branchId: "all", imageUrl: "" });
       loadData();
     } else {
       alert("Gagal menambah aset: " + res.error);
@@ -138,6 +140,12 @@ export default function AssetsPage() {
                     <div className="flex flex-col">
                       <span className="text-sm font-semibold text-white">{asset.name}</span>
                       <span className="text-[10px] text-white/30">{asset.note || "-"}</span>
+                      {asset.image_url && (
+                        <a href={asset.image_url} target="_blank" rel="noopener noreferrer" className="mt-2 w-fit flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] hover:bg-indigo-500/20 transition-all">
+                          <span className="material-symbols-outlined text-[14px]">image</span>
+                          Lihat Foto
+                        </a>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -252,6 +260,8 @@ export default function AssetsPage() {
                   onChange={e => setFormData({...formData, note: e.target.value})}
                 />
               </div>
+
+              <ImageUpload onUploadComplete={(url) => setFormData({ ...formData, imageUrl: url })} label="Foto Aset / Nota" />
 
               <div className="pt-4">
                 <button 

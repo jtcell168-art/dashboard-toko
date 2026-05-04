@@ -39,6 +39,7 @@ export async function addExpense(expenseData) {
       category: expenseData.category,
       amount: expenseData.amount,
       note: expenseData.note,
+      image_url: expenseData.imageUrl, // Tambahkan ini
       date: new Date().toISOString()
     })
     .select()
@@ -61,7 +62,8 @@ export async function updateExpense(id, expenseData) {
     .update({
       category: expenseData.category,
       amount: expenseData.amount,
-      note: expenseData.note
+      note: expenseData.note,
+      image_url: expenseData.imageUrl // Tambahkan ini
     })
     .eq("id", id);
 

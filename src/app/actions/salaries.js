@@ -30,7 +30,9 @@ export async function upsertSalary(payload) {
     base_salary: payload.base_salary,
     bonus: payload.bonus || 0,
     deductions: payload.deductions || 0,
-    notes: payload.notes
+    notes: payload.notes,
+    image_url: payload.image_url,
+    custom_name: payload.custom_name // Tambahkan ini
   });
 
   if (error) throw error;

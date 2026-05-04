@@ -8,12 +8,12 @@ import { getBranches } from "@/app/actions/branches";
 import { getEmployees } from "@/app/actions/salaries";
 import { getCurrentUser } from "@/app/actions/auth";
 import { exportToExcel } from "@/lib/utils/export";
+import ImageUpload from "@/components/ImageUpload"; // Tambahkan ini
 
 const CATEGORIES = [
   "Sewa Toko", 
   "Listrik", 
   "Internet", 
-  "Gaji", 
   "Transportasi", 
   "Maintenance", 
   "Kirim HP (Antar Gudang)", 
@@ -25,14 +25,13 @@ const CATEGORIES = [
   "Service Kendaraan",
   "Sumbangan / Duka",
   "Kirim Meja Demo",
-  "THR (Tunjangan Hari Raya)",
   "Transfer Laba", 
   "Lainnya"
 ];
 
 export default function ExpensesPage() {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ category: "", amount: "", branchId: "", note: "" });
+  const [form, setForm] = useState({ category: "", amount: "", branchId: "", note: "", imageUrl: "" });
   
   const [expenses, setExpenses] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -86,7 +85,7 @@ export default function ExpensesPage() {
       await addExpense(form);
       alert(`Biaya berhasil ditambahkan!`);
       setShowForm(false);
-      setForm({ ...form, category: "", amount: "", note: "" });
+      setForm({ ...form, category: "", amount: "", note: "", imageUrl: "" });
       setExpenses(await getExpenses()); // reload
     } catch (err) {
       alert("Error: " + err.message);
@@ -211,23 +210,6 @@ export default function ExpensesPage() {
                 }
               </select>
             </div>
-            {form.category === "THR (Tunjangan Hari Raya)" && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-white/40">Penerima THR *</label>
-                <select 
-                  className="input-field"
-                  onChange={e => {
-                    const emp = employees.find(emp => emp.id === e.target.value);
-                    if (emp) setForm({ ...form, note: `THR: ${emp.full_name}` });
-                  }}
-                >
-                  <option value="">Pilih Karyawan</option>
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.role})</option>
-                  ))}
-                </select>
-              </div>
-            )}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-white/40">Catatan</label>
               <input 
@@ -237,6 +219,8 @@ export default function ExpensesPage() {
                 placeholder={form.category === "Transfer Laba" ? "Laba periode x - y, Rekening: BRI 123..." : "Keterangan"} 
               />
             </div>
+            {/* Input Upload */}
+            <ImageUpload onUploadComplete={(url) => setForm({ ...form, imageUrl: url })} />
           </div>
           <button onClick={handleAdd} disabled={!form.category || !form.amount || !form.branchId} className="btn-gradient py-3 text-sm disabled:opacity-40 mt-2">Simpan</button>
         </div>
@@ -276,7 +260,12 @@ export default function ExpensesPage() {
                       <p className="text-sm font-semibold text-white">{e.category}</p>
                       <p className="text-[10px] text-white/30 mt-0.5">{e.note || "-"} · {e.branches?.name} · {new Date(e.date).toLocaleDateString("id-ID")}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex items-center gap-3">
+                      {e.image_url && (
+                        <a href={e.image_url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all border border-white/10">
+                          <span className="material-symbols-outlined text-[18px] text-white/50">image</span>
+                        </a>
+                      )}
                       <p className="text-sm font-bold text-white tabular-nums">{formatRupiah(e.amount)}</p>
                     </div>
                     {hasAccess && (
