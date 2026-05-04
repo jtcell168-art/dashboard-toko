@@ -38,9 +38,14 @@ export default function CicilanPage() {
         ) : data.length === 0 ? (
           <div className="p-8 text-center text-white/50">Belum ada data Cicilan.</div>
         ) : (
-          <div className="divide-y divide-white/[0.04]">{data.map(c => { const s = statusStyle[c.status] || statusStyle.active; const progress = c.tenor > 0 ? (c.paid_months / c.tenor) * 100 : 100; return (
+          <div className="divide-y divide-white/[0.04]">{data.map(c => { 
+            const s = statusStyle[c.status] || statusStyle.active; 
+            const tenor = Number(c.tenor) || 0;
+            const paidMonths = Number(c.paid_months) || 0;
+            const progress = tenor > 0 ? (paidMonths / tenor) * 100 : 0; 
+            return (
             <div key={c.id} className="px-4 py-4 hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-start justify-between mb-2"><div><p className="text-sm font-semibold text-white">{c.customer_name}</p><p className="text-[10px] text-white/30 mt-0.5">{c.product_name} · {c.customer_phone}</p></div><span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: s.bg, color: s.color }}>{s.label}</span></div>
+              <div className="flex items-start justify-between mb-2"><div><p className="text-sm font-semibold text-white">{c.customer_name || 'Pelanggan'}</p><p className="text-[10px] text-white/30 mt-0.5">{c.product_name || 'Produk'} · {c.customer_phone || '-'}</p></div><span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: s.bg, color: s.color }}>{s.label}</span></div>
               <div className="h-1.5 rounded-full bg-white/5 overflow-hidden mb-2"><div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: s.color }} /></div>
               <div className="flex justify-between text-xs text-white/40">
                 <span>DP: {formatRupiah(c.dp_amount)} · {c.paid_months}/{c.tenor} bulan</span>

@@ -251,9 +251,8 @@ CREATE TABLE expenses (
   amount BIGINT NOT NULL,
   branch_id UUID REFERENCES branches(id),
   note TEXT,
-  is_recurring BOOLEAN DEFAULT false,
-  created_by UUID REFERENCES profiles(id),
-  expense_date DATE DEFAULT CURRENT_DATE,
+  image_url TEXT,
+  date DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

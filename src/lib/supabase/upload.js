@@ -13,11 +13,16 @@ export async function uploadFile(file, bucket = 'proofs') {
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
     const filePath = `${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
+    const { data, error: uploadError } = await supabase.storage
       .from(bucket)
-      .upload(filePath, file);
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type // Memastikan content type terkirim dengan benar
+      });
 
     if (uploadError) {
+      console.error('Supabase upload error detail:', uploadError);
       throw uploadError;
     }
 
@@ -27,7 +32,7 @@ export async function uploadFile(file, bucket = 'proofs') {
 
     return publicUrl;
   } catch (error) {
-    console.error('Error uploading file:', error);
+    console.error('Error uploading file to Supabase:', error);
     return null;
   }
 }
