@@ -59,7 +59,9 @@ export default function PnLReportPage() {
 
   const capture = (element) => {
     const originalStyle = element.style.cssText;
-    element.style.width = "max-content";
+    
+    // For PnL, we want a wider fixed width to ensure chart renders fully
+    element.style.width = "1000px"; 
     element.style.height = "auto";
     element.style.overflow = "visible";
 
@@ -70,23 +72,26 @@ export default function PnLReportPage() {
       scrollContainer.style.width = "auto";
     }
 
-    window.htmlToImage.toJpeg(element, {
-      quality: 0.9,
-      backgroundColor: "#0f172a",
-      skipFonts: true,
-      pixelRatio: 1.5,
-    }).then(dataUrl => {
-      const link = document.createElement("a");
-      link.download = `Laporan_Laba_Rugi_${new Date().toLocaleDateString("id-ID")}.jpg`;
-      link.href = dataUrl;
-      link.click();
-    }).catch(err => {
-      console.error("Capture failed", err);
-      alert("Gagal membuat gambar laporan. Silakan segarkan halaman.");
-    }).finally(() => {
-      element.style.cssText = originalStyle;
-      if (scrollContainer) scrollContainer.style.cssText = originalScrollStyle;
-    });
+    // Small delay to let ResponsiveContainer adjust to 1000px
+    setTimeout(() => {
+      window.htmlToImage.toJpeg(element, {
+        quality: 0.95,
+        backgroundColor: "#0f172a",
+        skipFonts: true,
+        pixelRatio: 1.5,
+      }).then(dataUrl => {
+        const link = document.createElement("a");
+        link.download = `Laporan_Laba_Rugi_${new Date().toLocaleDateString("id-ID")}.jpg`;
+        link.href = dataUrl;
+        link.click();
+      }).catch(err => {
+        console.error("Capture failed", err);
+        alert("Gagal membuat gambar laporan. Silakan segarkan halaman.");
+      }).finally(() => {
+        element.style.cssText = originalStyle;
+        if (scrollContainer) scrollContainer.style.cssText = originalScrollStyle;
+      });
+    }, 100);
   };
 
   if (!branchIsMounted) return null;
@@ -169,15 +174,17 @@ export default function PnLReportPage() {
           )}
         </div>
 
+      <div id="pnl-content-area" className="flex flex-col gap-5 p-6 bg-[#0f172a] rounded-3xl">
+        {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="kpi-card indigo" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Pendapatan</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.revenue)}</p></div>
-        <div className="kpi-card blue" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">HPP</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.cogs)}</p></div>
-        <div className="kpi-card rose" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Biaya Operasional</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.expenses)}</p></div>
-        <div className="kpi-card emerald" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Laba Bersih</p><p className="text-xl font-bold text-emerald-400 tabular-nums">{formatRupiah(latest.profit)}</p><p className="text-[10px] text-emerald-400/60 mt-0.5">↑ {profitGrowth}% dari periode sebelumnya</p></div>
-      </div>
+          <div className="kpi-card indigo" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Pendapatan</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.revenue)}</p></div>
+          <div className="kpi-card blue" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">HPP</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.cogs)}</p></div>
+          <div className="kpi-card rose" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Biaya Operasional</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.expenses)}</p></div>
+          <div className="kpi-card emerald" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Laba Bersih</p><p className="text-xl font-bold text-emerald-400 tabular-nums">{formatRupiah(latest.profit)}</p><p className="text-[10px] text-emerald-400/60 mt-0.5">↑ {profitGrowth}% dari periode sebelumnya</p></div>
+        </div>
 
-      <div id="pnl-content-area" className="flex flex-col gap-5">
-        <div className="chart-card"><h3 className="text-sm font-semibold text-white mb-4">Trend {(startDate || endDate) ? 'Harian' : 'Bulanan'}</h3>
+        <div className="chart-card">
+        <h3 className="text-sm font-semibold text-white mb-4">Trend {(startDate || endDate) ? 'Harian' : 'Bulanan'}</h3>
         {isLoading ? (
           <div className="flex items-center justify-center h-[280px] text-white/30 text-sm animate-pulse">Memproses data...</div>
         ) : data.length > 0 ? (
