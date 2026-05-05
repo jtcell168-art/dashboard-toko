@@ -48,8 +48,9 @@ export default function TransactionReportPage() {
       if (startDate) query = query.gte("created_at", startDate);
       if (endDate) query = query.lte("created_at", endDate + "T23:59:59");
       
-      const targetBranch = user?.role === "owner" ? selectedBranch : (user?.branch_id || "all");
-      if (targetBranch !== "all") query = query.eq("branch_id", targetBranch);
+      const canFilterBranch = user?.role === "owner" || user?.role === "manager" || user?.role === "teknisi";
+      const targetBranch = canFilterBranch ? selectedBranch : (user?.branch_id || "all");
+      if (targetBranch !== "all" && targetBranch !== null) query = query.eq("branch_id", targetBranch);
       
       const { data: trx } = await query;
       

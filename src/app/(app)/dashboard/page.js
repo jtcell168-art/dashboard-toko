@@ -206,6 +206,42 @@ function ServiceAlerts({ serviceAlerts = [] }) {
 }
 
 /* ============================
+   ATTENDANCE ALERTS
+   ============================ */
+function AttendanceAlerts({ issues = [] }) {
+  return (
+    <div className="chart-card border-red-500/10 bg-red-500/[0.02]">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <span className="material-symbols-outlined text-red-400 text-lg">event_busy</span>
+          Pelanggaran Absensi Hari Ini
+        </h3>
+        <Link href="/hrd/attendance/report" className="text-[10px] text-indigo-400 hover:text-indigo-300">Detail Report →</Link>
+      </div>
+      <div className="flex flex-col gap-1">
+        {issues.length === 0 ? (
+          <p className="text-xs text-white/40 text-center py-4">Tidak ada pelanggaran absensi hari ini</p>
+        ) : issues.map((issue) => (
+          <div key={issue.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors border border-transparent hover:border-white/5">
+            <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[18px] text-red-400">person_off</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-white truncate">{issue.name}</p>
+              <p className="text-[10px] text-white/30 truncate">{issue.role} · {issue.branch}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs font-bold text-red-400">-Rp{issue.deduction.toLocaleString("id-ID")}</p>
+              <p className="text-[9px] text-white/40 font-medium">{issue.notes}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================
    DASHBOARD PAGE
    ============================ */
 export default function DashboardPage() {
@@ -541,9 +577,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Activity Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <RecentTransactions transactions={data.recentTransactions} />
         <ServiceAlerts serviceAlerts={data.serviceAlerts} />
+        <AttendanceAlerts issues={data.attendanceIssues} />
       </div>
 
       {/* Message Modal */}

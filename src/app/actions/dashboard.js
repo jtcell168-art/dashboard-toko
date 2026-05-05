@@ -1,6 +1,7 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
 import { getTotalSalaries } from "./salaries";
+import { calcDeduction } from "@/lib/attendanceUtils";
 
 export async function getDashboardData(startDate, endDate, selectedBranchId = "all") {
   try {
@@ -22,14 +23,15 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
     const { data: profile } = await supabase.from("profiles").select("role, branch_id").eq("id", authUser.id).single();
     
     const isOwner = profile?.role === "owner";
+    const isManager = profile?.role === "manager";
     const isTeknisi = profile?.role === "teknisi";
     const userBranchId = profile?.branch_id;
     
     // Final branch filter logic: 
-    // - If owner and 'all' -> no filter
+    // - If owner/manager and 'all' -> no filter
     // - If teknisi -> no filter (can see service across all branches as requested)
-    // - Else (manager/kasir) -> filter by their userBranchId
-    let targetBranchId = (isOwner || isTeknisi) ? (selectedBranchId === "all" ? null : selectedBranchId) : userBranchId;
+    // - Else (kasir) -> filter by their userBranchId
+    let targetBranchId = (isOwner || isManager || isTeknisi) ? (selectedBranchId === "all" ? null : selectedBranchId) : userBranchId;
 
     // 1. Get total users
     const usersQuery = supabase.from("profiles").select("*", { count: "exact", head: true });
@@ -223,6 +225,46 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
     
     const myKasbonBalance = myKasbonData?.reduce((sum, k) => sum + Number(k.remaining), 0) || 0;
 
+    // 12. Attendance Issues today
+    //  - Manager: semua admin & teknisi dari SEMUA cabang (tanpa filter cabang)
+    //  - Owner:   semua tim, difilter cabang jika dipilih
+    let attendanceIssues = [];
+    const todayStr = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    if (profile?.role === 'owner' || profile?.role === 'manager' || profile?.role === 'admin') {
+      let profQuery = supabase
+        .from("profiles")
+        .select("id, full_name, role, branch_id, branches(name)")
+        .or("is_active.eq.true,is_active.is.null"); // include profiles where is_active not set
+
+      if (profile?.role === 'manager') {
+        // Manager melihat kasir & teknisi dari semua cabang — tanpa filter branch
+        profQuery = profQuery.in("role", ['kasir', 'teknisi']);
+      } else if (targetBranchId) {
+        // Owner: filter berdasarkan branch yang dipilih
+        profQuery = profQuery.eq("branch_id", targetBranchId);
+      }
+
+      const { data: todayProfs } = await profQuery;
+
+      // Fetch semua attendance hari ini (tanpa filter branch untuk manager)
+      let attQuery = supabase.from("attendance").select("*").eq("date", todayStr);
+      if (profile?.role !== 'manager' && targetBranchId) {
+        attQuery = attQuery.eq("branch_id", targetBranchId);
+      }
+      const { data: todayAtts } = await attQuery;
+
+      if (todayProfs) {
+        attendanceIssues = todayProfs.map(p => {
+          const rec = (todayAtts || []).find(a => a.profile_id === p.id);
+          const row = rec ? { ...rec } : { check_in: null, break_start: null, break_end: null };
+          const { deduction, deduction_notes } = calcDeduction(row, todayStr);
+          if (deduction === 0) return null;
+          return { id: p.id, name: p.full_name, role: p.role, branch: p.branches?.name || "Tanpa Cabang", deduction, notes: deduction_notes };
+        }).filter(Boolean);
+      }
+    }
+
     return {
       kpi: {
         revenue: totalRevenue,
@@ -238,6 +280,7 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       sales7Days,
       revenueByBranch,
       serviceAlerts: mappedAlerts,
+      attendanceIssues, // Add this
       userRole: profile?.role
     };
   } catch (error) {
