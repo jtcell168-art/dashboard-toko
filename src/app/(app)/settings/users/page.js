@@ -114,7 +114,11 @@ export default function UsersSettingsPage() {
                   >
                     <option value="kasir">Kasir</option>
                     <option value="teknisi">Teknisi</option>
-                    <option value="manager">Manager</option>
+                    {(currentUser?.role === 'owner' || currentUser?.role === 'manager') && (
+                      <>
+                        <option value="manager">Manager</option>
+                      </>
+                    )}
                     {currentUser?.role === 'owner' && <option value="owner">Owner</option>}
                   </select>
                 </div>
@@ -171,9 +175,20 @@ export default function UsersSettingsPage() {
               <tbody>
                 {users
                   .filter(u => {
-                    // Manager cannot see or edit Owner
-                    if (currentUser?.role === 'manager' && u.role === 'owner') return false;
-                    return true;
+                    if (!currentUser) return false;
+                    
+                    // Owner can see everything
+                    if (currentUser.role === 'owner') return true;
+
+                    // Manager can see everyone EXCEPT Owner
+                    if (currentUser.role === 'manager') return u.role !== 'owner';
+
+                    // Admin & Teknisi can only see Admin, Teknisi, and Kasir
+                    if (currentUser.role === 'admin' || currentUser.role === 'teknisi' || currentUser.role === 'kasir') {
+                      return u.role === 'admin' || u.role === 'teknisi' || u.role === 'kasir';
+                    }
+
+                    return false;
                   })
                   .map(u => (
                   <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
