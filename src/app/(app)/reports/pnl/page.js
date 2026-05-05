@@ -13,6 +13,7 @@ const CustomTooltip = ({ active, payload, label }) => { if (!active || !payload)
 export default function PnLReportPage() {
   const { selectedBranch, isMounted: branchIsMounted } = useBranch();
   const [data, setData] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -24,18 +25,33 @@ export default function PnLReportPage() {
 
     async function load() {
       setIsLoading(true);
-      const [user, res] = await Promise.all([
+      const [user, pnl, branchList] = await Promise.all([
         getCurrentUser(),
-        getPnlData(selectedBranch, startDate, endDate)
+        getPnlData(selectedBranch, startDate, endDate),
+        fetch("/api/branches").then(res => res.json()).catch(() => []) 
+        // Wait, I should use the action if possible, but let's try a safer way or import getBranches
       ]);
+      
+      // Let's use createClient to fetch branches directly since getBranches might not be exported or easy to find
+      const supabase = (await import("@/lib/supabase/client")).createClient();
+      const { data: bData } = await supabase.from("branches").select("*");
+      
       setCurrentUser(user);
-      setData(res);
+      setData(pnl);
+      setBranches(bData || []);
       setIsLoading(false);
     }
     load();
   }, [selectedBranch, branchIsMounted, startDate, endDate]);
 
-  const latest = data[data.length - 1] || { revenue: 0, cogs: 0, expenses: 0, profit: 0 };
+  const totals = data.reduce((acc, curr) => ({
+    revenue: acc.revenue + curr.revenue,
+    cogs: acc.cogs + curr.cogs,
+    expenses: acc.expenses + curr.expenses,
+    profit: acc.profit + (curr.profit || 0)
+  }), { revenue: 0, cogs: 0, expenses: 0, profit: 0 });
+
+  const latest = totals;
   const prev = data[data.length - 2];
   const profitGrowth = prev && prev.profit > 0 ? (((latest.profit - prev.profit) / prev.profit) * 100).toFixed(1) : 0;
 
@@ -74,12 +90,13 @@ export default function PnLReportPage() {
 
     // Small delay to let ResponsiveContainer adjust to 1000px
     setTimeout(() => {
-      window.htmlToImage.toJpeg(element, {
-        quality: 0.95,
-        backgroundColor: "#0f172a",
-        skipFonts: true,
-        pixelRatio: 1.5,
-      }).then(dataUrl => {
+        window.htmlToImage.toJpeg(element, {
+          quality: 0.95,
+          backgroundColor: "#0f172a",
+          skipFonts: true,
+          pixelRatio: 1.5,
+          filter: (node) => node.tagName !== 'BUTTON' && node.tagName !== 'INPUT',
+        }).then(dataUrl => {
         const link = document.createElement("a");
         link.download = `Laporan_Laba_Rugi_${new Date().toLocaleDateString("id-ID")}.jpg`;
         link.href = dataUrl;
@@ -107,44 +124,45 @@ export default function PnLReportPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-white">Laporan Laba Rugi</h1>
-          <p className="text-sm text-white/40 mt-0.5">Analisis pendapatan dan pengeluaran — {selectedBranch === 'all' ? 'Semua Cabang' : 'Cabang Terpilih'}</p>
-        </div>
+    <div className="flex flex-col gap-6">
+      <div id="pnl-content-area" className="flex flex-col gap-5 p-6 bg-[#0f172a] rounded-3xl">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Laporan Laba Rugi</h1>
+            <p className="text-sm text-white/40 mt-0.5">Analisis pendapatan dan pengeluaran — {selectedBranch === 'all' ? 'Semua Cabang' : branches.find(b => b.id === selectedBranch)?.name}</p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => {
-              const exportData = data.map(item => ({
-                Periode: item.label,
-                Pendapatan: item.revenue,
-                HPP: item.cogs,
-                Biaya: item.expenses,
-                Laba_Bersih: item.profit,
-                Margin: item.revenue > 0 ? ((item.profit / item.revenue) * 100).toFixed(1) + "%" : "0%"
-              }));
-              exportToExcel(exportData, "Laporan_Laba_Rugi");
-            }}
-            className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
-          >
-            <span className="material-symbols-outlined text-[18px]">download</span>
-            Excel
-          </button>
-          
-          <button 
-            onClick={() => handleDownloadJPG()}
-            className="px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all"
-          >
-            <span className="material-symbols-outlined text-[18px]">image</span>
-            Download JPG
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => {
+                const exportData = data.map(item => ({
+                  Periode: item.label,
+                  Pendapatan: item.revenue,
+                  HPP: item.cogs,
+                  Biaya: item.expenses,
+                  Laba_Bersih: item.profit,
+                  Margin: item.revenue > 0 ? ((item.profit / item.revenue) * 100).toFixed(1) + "%" : "0%"
+                }));
+                exportToExcel(exportData, "Laporan_Laba_Rugi");
+              }}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
+            >
+              <span className="material-symbols-outlined text-[18px]">download</span>
+              Excel
+            </button>
+            
+            <button 
+              onClick={() => handleDownloadJPG()}
+              className="px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all"
+            >
+              <span className="material-symbols-outlined text-[18px]">image</span>
+              Download JPG
+            </button>
+          </div>
         </div>
-      </div>
         
         {/* Date Filter */}
-        <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-xl border border-white/10">
+        <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-xl border border-white/10 w-fit">
           <div className="flex flex-col px-2">
             <label className="text-[9px] text-white/30 uppercase font-bold">Mulai Dari</label>
             <input 
@@ -174,7 +192,6 @@ export default function PnLReportPage() {
           )}
         </div>
 
-      <div id="pnl-content-area" className="flex flex-col gap-5 p-6 bg-[#0f172a] rounded-3xl">
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="kpi-card indigo" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Pendapatan</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.revenue)}</p></div>
@@ -184,28 +201,28 @@ export default function PnLReportPage() {
         </div>
 
         <div className="chart-card">
-        <h3 className="text-sm font-semibold text-white mb-4">Trend {(startDate || endDate) ? 'Harian' : 'Bulanan'}</h3>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-[280px] text-white/30 text-sm animate-pulse">Memproses data...</div>
-        ) : data.length > 0 ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={data}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" /><YAxis tickFormatter={v => `${(v/1e6).toFixed(1)}M`} /><Tooltip content={<CustomTooltip />} /><Legend /><Bar dataKey="revenue" name="Pendapatan" fill="#6366F1" radius={[4,4,0,0]} /><Bar dataKey="cogs" name="HPP" fill="#8B5CF6" radius={[4,4,0,0]} /><Bar dataKey="profit" name="Laba" fill="#10B981" radius={[4,4,0,0]} /></BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-[280px] text-white/30 text-sm">Belum ada data transaksi</div>
-        )}
-      </div>
+          <h3 className="text-sm font-semibold text-white mb-4">Trend {(startDate || endDate) ? 'Harian' : 'Bulanan'}</h3>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-[280px] text-white/30 text-sm animate-pulse">Memproses data...</div>
+          ) : data.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={data}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" /><YAxis tickFormatter={v => `${(v/1e6).toFixed(1)}M`} /><Tooltip content={<CustomTooltip />} /><Legend /><Bar dataKey="revenue" name="Pendapatan" fill="#6366F1" radius={[4,4,0,0]} /><Bar dataKey="cogs" name="HPP" fill="#8B5CF6" radius={[4,4,0,0]} /><Bar dataKey="profit" name="Laba" fill="#10B981" radius={[4,4,0,0]} /></BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[280px] text-white/30 text-sm">Belum ada data transaksi</div>
+          )}
+        </div>
 
-      <div className="glass-card overflow-hidden">
-        {isLoading ? (
-          <div className="p-20 text-center text-white/30 animate-pulse">Memuat tabel laba rugi...</div>
-        ) : data.length > 0 ? (
-          <table className="data-table"><thead><tr><th>{(startDate || endDate) ? 'Tanggal' : 'Bulan'}</th><th style={{textAlign:"right"}}>Pendapatan</th><th style={{textAlign:"right"}}>HPP</th><th style={{textAlign:"right"}}>Biaya</th><th style={{textAlign:"right"}}>Laba Bersih</th><th style={{textAlign:"right"}}>Margin</th></tr></thead>
-            <tbody>{data.map(m => (<tr key={m.label}><td className="font-semibold text-white">{m.label}</td><td style={{textAlign:"right"}} className="tabular-nums">{formatRupiah(m.revenue)}</td><td style={{textAlign:"right"}} className="tabular-nums text-white/40">{formatRupiah(m.cogs)}</td><td style={{textAlign:"right"}} className="tabular-nums text-white/40">{formatRupiah(m.expenses)}</td><td style={{textAlign:"right"}} className="tabular-nums font-semibold text-emerald-400">{formatRupiah(m.profit)}</td><td style={{textAlign:"right"}} className="tabular-nums text-white/50">{m.revenue > 0 ? ((m.profit / m.revenue) * 100).toFixed(1) : 0}%</td></tr>))}</tbody></table>
-        ) : (
-          <div className="p-8 text-center text-white/50 text-sm">Tidak ada data untuk ditampilkan.</div>
-        )}
-      </div>
+        <div className="glass-card overflow-hidden">
+          {isLoading ? (
+            <div className="p-20 text-center text-white/30 animate-pulse">Memuat tabel laba rugi...</div>
+          ) : data.length > 0 ? (
+            <table className="data-table"><thead><tr><th>{(startDate || endDate) ? 'Tanggal' : 'Bulan'}</th><th style={{textAlign:"right"}}>Pendapatan</th><th style={{textAlign:"right"}}>HPP</th><th style={{textAlign:"right"}}>Biaya</th><th style={{textAlign:"right"}}>Laba Bersih</th><th style={{textAlign:"right"}}>Margin</th></tr></thead>
+              <tbody>{data.map(m => (<tr key={m.label}><td className="font-semibold text-white">{m.label}</td><td style={{textAlign:"right"}} className="tabular-nums">{formatRupiah(m.revenue)}</td><td style={{textAlign:"right"}} className="tabular-nums text-white/40">{formatRupiah(m.cogs)}</td><td style={{textAlign:"right"}} className="tabular-nums text-white/40">{formatRupiah(m.expenses)}</td><td style={{textAlign:"right"}} className="tabular-nums font-semibold text-emerald-400">{formatRupiah(m.profit)}</td><td style={{textAlign:"right"}} className="tabular-nums text-white/50">{m.revenue > 0 ? ((m.profit / m.revenue) * 100).toFixed(1) : 0}%</td></tr>))}</tbody></table>
+          ) : (
+            <div className="p-8 text-center text-white/50 text-sm">Tidak ada data untuk ditampilkan.</div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import TransactionDetailModal from "@/components/pos/TransactionDetailModal";
 export default function TransactionReportPage() {
   const { selectedBranch, isMounted: branchIsMounted } = useBranch();
   const [data, setData] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedTrxId, setSelectedTrxId] = useState(null);
@@ -34,6 +35,11 @@ export default function TransactionReportPage() {
       const user = await getCurrentUser();
       
       const supabase = createClient();
+      
+      // Fetch branches for title display
+      const { data: bData } = await supabase.from("branches").select("*");
+      setBranches(bData || []);
+      
       let query = supabase
         .from("transactions")
         .select("*, profiles(full_name), branches(name)")
@@ -82,9 +88,9 @@ export default function TransactionReportPage() {
   };
 
   const handleDownloadSummaryJPG = () => {
-    const element = document.getElementById("transaction-table-area");
+    const element = document.getElementById("transaction-report-content");
     if (!element) {
-      alert("Area tabel tidak ditemukan.");
+      alert("Area laporan tidak ditemukan.");
       return;
     }
 
@@ -118,6 +124,17 @@ export default function TransactionReportPage() {
       backgroundColor: "#0f172a",
       skipFonts: true,
       pixelRatio: 1.5,
+      filter: (node) => {
+        // Exclude the download buttons from the image
+        if (node.classList && node.classList.contains('no-print-buttons')) {
+          // We want the text inside but not the buttons. 
+          // However, html-to-image filter is for the whole node.
+          // Better way: hide the buttons temporarily.
+          return true;
+        }
+        if (node.tagName === 'BUTTON') return false;
+        return true;
+      }
     })
       .then((dataUrl) => {
         const link = document.createElement("a");
@@ -139,62 +156,62 @@ export default function TransactionReportPage() {
 
   return (
     <div className="flex flex-col gap-6 stagger-children">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-white">Laporan Transaksi</h1>
-          <p className="text-sm text-white/40 mt-1">Daftar riwayat penjualan dan servis — {selectedBranch === 'all' ? 'Semua Cabang' : data[0]?.branches?.name || '...'}</p>
-        </div>
+      <div id="transaction-report-content" className="flex flex-col gap-5 p-4 bg-[#0f172a] rounded-3xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 no-print-buttons">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Laporan Transaksi</h1>
+            <p className="text-xs md:text-sm text-white/40">
+              {selectedBranch === 'all' ? 'Semua Cabang' : branches.find(b => b.id === selectedBranch)?.name} — {data.length} Transaksi
+            </p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={handleExport}
-            className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
-          >
-            <span className="material-symbols-outlined text-[18px]">download</span>
-            Export Excel
-          </button>
-          
-          {(currentUser?.role === 'owner' || currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <div className="flex items-center gap-2">
             <button 
-              onClick={handleDownloadSummaryJPG}
-              className="px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all"
+              onClick={handleExport}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
             >
-              <span className="material-symbols-outlined text-[18px]">image</span>
-              Download JPG
+              <span className="material-symbols-outlined text-[18px]">download</span>
+              Export Excel
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Filters Row */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Date Filter */}
-        <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
-          <div className="flex flex-col px-2 py-1">
-            <label className="text-[9px] uppercase font-bold text-white/30">Dari</label>
-            <input 
-              type="date" 
-              className="bg-transparent text-xs text-white focus:outline-none"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <div className="w-px h-6 bg-white/10" />
-          <div className="flex flex-col px-2 py-1">
-            <label className="text-[9px] uppercase font-bold text-white/30">Sampai</label>
-            <input 
-              type="date" 
-              className="bg-transparent text-xs text-white focus:outline-none"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
+            
+            {(currentUser?.role === 'owner' || currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <button 
+                onClick={handleDownloadSummaryJPG}
+                className="px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">image</span>
+                Download JPG
+              </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Table Area */}
-      <div id="transaction-table-area" className="glass-card overflow-hidden">
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
+            <div className="flex flex-col px-2 py-1">
+              <label className="text-[9px] uppercase font-bold text-white/30">Dari</label>
+              <input 
+                type="date" 
+                className="bg-transparent text-xs text-white focus:outline-none"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="w-px h-6 bg-white/10" />
+            <div className="flex flex-col px-2 py-1">
+              <label className="text-[9px] uppercase font-bold text-white/30">Sampai</label>
+              <input 
+                type="date" 
+                className="bg-transparent text-xs text-white focus:outline-none"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Table Area */}
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>

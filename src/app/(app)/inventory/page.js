@@ -304,9 +304,9 @@ export default function InventoryPage() {
   };
 
   const handleDownloadJPG = () => {
-    const element = document.getElementById("inventory-content-area");
+    const element = document.getElementById("inventory-report-content");
     if (!element) {
-      alert("Area inventaris tidak ditemukan.");
+      alert("Area laporan tidak ditemukan.");
       return;
     }
 
@@ -345,7 +345,8 @@ export default function InventoryPage() {
       quality: 0.85, 
       backgroundColor: "#0f172a",
       skipFonts: true,
-      pixelRatio: 1, 
+      pixelRatio: 1,
+      filter: (node) => node.tagName !== 'BUTTON' && node.tagName !== 'INPUT',
     })
       .then((dataUrl) => {
         const link = document.createElement("a");
@@ -385,6 +386,7 @@ export default function InventoryPage() {
       )}
       
       {/* Page Header */}
+      <div id="inventory-report-content" className="flex flex-col gap-5 p-4 bg-[#0f172a] rounded-3xl">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Inventaris</h1>
@@ -649,8 +651,7 @@ export default function InventoryPage() {
         ))}
       </div>
 
-      <div id="inventory-content-area" className="flex flex-col gap-6">
-        {/* Summary Cards */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="kpi-card indigo" style={{ padding: 12 }}>
           <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Unit</p>
@@ -953,7 +954,7 @@ export default function InventoryPage() {
             Menampilkan {filtered.length} dari {dbProducts.length} produk
           </p>
         </div>
-        </div>
+      </div>
       </div>
 
       {/* Price History Modal */}
