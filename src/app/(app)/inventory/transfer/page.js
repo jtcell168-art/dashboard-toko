@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { receiveTransfer } from "@/app/actions/inventory";
 
 const statusStyle = { completed: { bg: "rgba(16,185,129,0.12)", color: "#34D399", label: "Selesai" }, in_transit: { bg: "rgba(245,158,11,0.12)", color: "#FBBF24", label: "Dalam Kirim" } };
 
@@ -53,6 +54,21 @@ export default function TransferStokPage() {
     }
   };
 
+  const handleReceive = async (transferId) => {
+    if (!confirm("Apakah Anda yakin telah menerima barang ini?")) return;
+    try {
+      const res = await receiveTransfer(transferId);
+      if (res.success) {
+        alert("Transfer berhasil diselesaikan!");
+        window.location.reload();
+      } else {
+        alert("Gagal: " + res.error);
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
@@ -89,7 +105,17 @@ export default function TransferStokPage() {
                   <p className="text-sm font-semibold text-white truncate">{t.products?.name || "Produk dihapus"} <span className="text-white/30">×{t.quantity}</span></p>
                   <p className="text-[10px] text-white/30 mt-0.5">{t.from_branch?.name || "-"} → {t.to_branch?.name || "-"} · {new Date(t.created_at).toLocaleDateString('id-ID')} · oleh {t.profiles?.full_name || "Unknown"}</p>
                 </div>
-                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: s.bg, color: s.color }}>{s.label}</span>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: s.bg, color: s.color }}>{s.label}</span>
+                  {t.status === 'in_transit' && (
+                    <button 
+                      onClick={() => handleReceive(t.id)}
+                      className="text-[10px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-2 py-1 rounded border border-emerald-500/30 transition-colors"
+                    >
+                      Terima Barang
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

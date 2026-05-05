@@ -397,3 +397,84 @@ export async function bulkImportProducts(productsArray) {
   }
 }
 
+// RECEIVE STOCK TRANSFER
+export async function receiveTransfer(transferId) {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Unauthorized");
+
+    // 1. Get transfer details
+    const { data: transfer, error: transferError } = await supabase
+      .from("stock_transfers")
+      .select("*")
+      .eq("id", transferId)
+      .single();
+
+    if (transferError || !transfer) throw new Error("Transfer tidak ditemukan.");
+    if (transfer.status === "completed") throw new Error("Transfer sudah diselesaikan.");
+
+    // Cek wewenang (Owner, Manager, atau staff dari cabang tujuan)
+    if (user.role !== "owner" && user.role !== "manager" && user.branch_id !== transfer.to_branch_id) {
+      throw new Error("Hanya staff cabang tujuan, Owner, atau Manager yang bisa menerima barang.");
+    }
+
+    // 2. Kurangi stok dari cabang asal
+    const { data: fromStock } = await supabase
+      .from("stock")
+      .select("quantity")
+      .eq("product_id", transfer.product_id)
+      .eq("branch_id", transfer.from_branch_id)
+      .single();
+
+    const currentFromQty = fromStock ? fromStock.quantity : 0;
+    if (currentFromQty < transfer.quantity) {
+      throw new Error("Stok cabang asal tidak mencukupi untuk menyelesaikan transfer ini.");
+    }
+
+    await supabase
+      .from("stock")
+      .update({ quantity: currentFromQty - transfer.quantity })
+      .eq("product_id", transfer.product_id)
+      .eq("branch_id", transfer.from_branch_id);
+
+    // 3. Tambahkan stok ke cabang tujuan
+    const { data: toStock } = await supabase
+      .from("stock")
+      .select("quantity")
+      .eq("product_id", transfer.product_id)
+      .eq("branch_id", transfer.to_branch_id)
+      .maybeSingle();
+
+    if (toStock) {
+      await supabase
+        .from("stock")
+        .update({ quantity: toStock.quantity + transfer.quantity })
+        .eq("product_id", transfer.product_id)
+        .eq("branch_id", transfer.to_branch_id);
+    } else {
+      await supabase
+        .from("stock")
+        .insert({
+          product_id: transfer.product_id,
+          branch_id: transfer.to_branch_id,
+          quantity: transfer.quantity
+        });
+    }
+
+    // 4. Update status transfer
+    const { error: updateError } = await supabase
+      .from("stock_transfers")
+      .update({ 
+        status: "completed",
+        completed_at: new Date().toISOString()
+      })
+      .eq("id", transferId);
+
+    if (updateError) throw updateError;
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
