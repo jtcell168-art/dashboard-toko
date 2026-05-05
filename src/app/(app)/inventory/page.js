@@ -40,6 +40,7 @@ export default function InventoryPage() {
   const [selectedManualBranch, setSelectedManualBranch] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
@@ -302,10 +303,77 @@ export default function InventoryPage() {
     setImeiList(imeiList.filter(i => i.imei !== imei));
   };
 
+  const handleDownloadJPG = () => {
+    const element = document.getElementById("inventory-content-area");
+    if (!element) {
+      alert("Area inventaris tidak ditemukan.");
+      return;
+    }
+
+    setIsCapturing(true);
+
+    if (typeof window.htmlToImage === "undefined") {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
+      script.async = true;
+      script.onload = () => captureInventory(element);
+      script.onerror = () => {
+        setIsCapturing(false);
+        alert("Gagal memuat library pengolah gambar.");
+      };
+      document.head.appendChild(script);
+    } else {
+      captureInventory(element);
+    }
+  };
+
+  const captureInventory = (element) => {
+    // Optimization for large datasets (200+ items)
+    const originalStyle = element.style.height;
+    element.style.height = "auto";
+    
+    window.htmlToImage.toJpeg(element, { 
+      quality: 0.85, // Slightly lower quality for faster processing
+      backgroundColor: "#0f172a",
+      skipFonts: true,
+      pixelRatio: 1, // Crucial: avoid high-DPI scaling which makes the image 4x-9x larger
+    })
+      .then((dataUrl) => {
+        const link = document.createElement("a");
+        link.download = `Stok_Inventaris_${new Date().toLocaleDateString("id-ID").replace(/\//g, "-")}.jpg`;
+        link.href = dataUrl;
+        link.click();
+      })
+      .catch((err) => {
+        console.error("Capture error:", err);
+        alert("Gagal membuat gambar. Daftar stok Anda mungkin terlalu panjang untuk diproses sebagai gambar. Disarankan gunakan Export Excel untuk data besar.");
+      })
+      .finally(() => {
+        element.style.height = originalStyle;
+        setIsCapturing(false);
+      });
+  };
+
   if (!isMounted || !branchIsMounted) return null;
 
   return (
     <div className="flex flex-col gap-6 stagger-children">
+      {/* Processing Overlay */}
+      {isCapturing && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md">
+          <div className="bg-[#1E293B] border border-white/10 p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-4 animate-scale-in text-center max-w-xs">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+              <span className="absolute inset-0 flex items-center justify-center material-symbols-outlined text-indigo-400">image</span>
+            </div>
+            <div>
+              <h3 className="text-white font-bold">Memproses Gambar...</h3>
+              <p className="text-white/40 text-[10px] mt-1">Daftar stok yang panjang sedang dikonversi. Mohon tunggu sebentar.</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
@@ -364,6 +432,15 @@ export default function InventoryPage() {
             <span className="material-symbols-outlined text-[18px]">sync</span>
             <span className="hidden sm:inline">Sinkronkan</span>
             <span className="sm:hidden">Sync</span>
+          </button>
+          
+          <button 
+            onClick={handleDownloadJPG}
+            className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-indigo-500/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">image</span>
+            <span className="hidden sm:inline">Download JPG</span>
+            <span className="sm:hidden">JPG</span>
           </button>
 
           {hasAccess && (
@@ -562,7 +639,8 @@ export default function InventoryPage() {
         ))}
       </div>
 
-      {/* Summary Cards */}
+      <div id="inventory-content-area" className="flex flex-col gap-6">
+        {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="kpi-card indigo" style={{ padding: 12 }}>
           <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold mb-1">Total Unit</p>
@@ -864,6 +942,7 @@ export default function InventoryPage() {
           <p className="text-[11px] text-white/30">
             Menampilkan {filtered.length} dari {dbProducts.length} produk
           </p>
+        </div>
         </div>
       </div>
 

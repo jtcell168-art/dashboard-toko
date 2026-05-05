@@ -7,12 +7,14 @@ import { exportToExcel } from "@/lib/utils/export";
 import { deleteTransaction } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
 import { useBranch } from "@/context/BranchContext";
+import TransactionDetailModal from "@/components/pos/TransactionDetailModal";
 
 export default function TransactionReportPage() {
   const { selectedBranch, isMounted: branchIsMounted } = useBranch();
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [selectedTrxId, setSelectedTrxId] = useState(null);
   
   // Date Filter State
   const [startDate, setStartDate] = useState(() => {
@@ -79,6 +81,48 @@ export default function TransactionReportPage() {
     exportToExcel(exportData, "Laporan_Transaksi");
   };
 
+  const handleDownloadSummaryJPG = () => {
+    const element = document.getElementById("transaction-table-area");
+    if (!element) {
+      alert("Area tabel tidak ditemukan.");
+      return;
+    }
+
+    if (typeof window.htmlToImage === "undefined") {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
+      script.async = true;
+      script.onload = () => captureTable(element);
+      script.onerror = () => alert("Gagal memuat library pengolah gambar.");
+      document.head.appendChild(script);
+    } else {
+      captureTable(element);
+    }
+  };
+
+  const captureTable = (element) => {
+    const originalStyle = element.style.height;
+    element.style.height = "auto";
+    
+    window.htmlToImage.toJpeg(element, { 
+      quality: 0.9,
+      backgroundColor: "#0f172a",
+      skipFonts: true,
+    })
+      .then((dataUrl) => {
+        const link = document.createElement("a");
+        link.download = `Laporan_Transaksi_${new Date().toLocaleDateString("id-ID").replace(/\//g, "-")}.jpg`;
+        link.href = dataUrl;
+        link.click();
+        element.style.height = originalStyle;
+      })
+      .catch((err) => {
+        console.error("Capture error:", err);
+        alert("Gagal membuat gambar. Silakan segarkan halaman.");
+        element.style.height = originalStyle;
+      });
+  };
+
   if (!branchIsMounted) return null;
 
   return (
@@ -98,6 +142,16 @@ export default function TransactionReportPage() {
             <span className="material-symbols-outlined text-[18px]">download</span>
             Export Excel
           </button>
+          
+          {(currentUser?.role === 'owner' || currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+            <button 
+              onClick={handleDownloadSummaryJPG}
+              className="px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all"
+            >
+              <span className="material-symbols-outlined text-[18px]">image</span>
+              Download JPG
+            </button>
+          )}
         </div>
       </div>
 
@@ -128,7 +182,7 @@ export default function TransactionReportPage() {
       </div>
 
       {/* Table Area */}
-      <div className="glass-card overflow-hidden">
+      <div id="transaction-table-area" className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -183,7 +237,11 @@ export default function TransactionReportPage() {
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <div className="flex items-center justify-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-white transition-colors" title="Lihat Detail">
+                        <button 
+                          onClick={() => setSelectedTrxId(trx.id)}
+                          className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-white transition-colors" 
+                          title="Lihat Detail"
+                        >
                           <span className="material-symbols-outlined text-[18px]">visibility</span>
                         </button>
                         {currentUser?.role === 'owner' && (
@@ -200,6 +258,14 @@ export default function TransactionReportPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal Detail */}
+      {selectedTrxId && (
+        <TransactionDetailModal 
+          transactionId={selectedTrxId} 
+          onClose={() => setSelectedTrxId(null)} 
+        />
+      )}
     </div>
   );
 }

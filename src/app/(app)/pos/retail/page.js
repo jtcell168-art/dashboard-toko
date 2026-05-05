@@ -549,6 +549,45 @@ function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, cus
     window.print();
   };
 
+  const handleDownloadJPG = () => {
+    const element = document.getElementById("receipt-content");
+    if (!element) {
+      alert("Konten nota tidak ditemukan.");
+      return;
+    }
+
+    if (typeof window.htmlToImage === "undefined") {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
+      script.async = true;
+      script.onload = () => {
+        captureAndDownload(element);
+      };
+      script.onerror = () => alert("Gagal memuat library pengolah gambar.");
+      document.head.appendChild(script);
+    } else {
+      captureAndDownload(element);
+    }
+  };
+
+  const captureAndDownload = (element) => {
+    window.htmlToImage.toJpeg(element, {
+      quality: 0.9,
+      backgroundColor: "#0f172a",
+      skipFonts: true,
+    })
+      .then((dataUrl) => {
+        const link = document.createElement("a");
+        link.download = `Nota_${trxId}.jpg`;
+        link.href = dataUrl;
+        link.click();
+      })
+      .catch((err) => {
+        console.error("Capture error:", err);
+        alert("Gagal membuat gambar nota. Silakan segarkan halaman.");
+      });
+  };
+
   return (
     <div className="max-w-lg mx-auto flex flex-col gap-5 animate-fade-slide-up">
       {/* Success Icon */}
@@ -640,6 +679,13 @@ function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, cus
         >
           <span className="material-symbols-outlined text-[18px]">print</span>
           Cetak Nota
+        </button>
+        <button 
+          onClick={handleDownloadJPG}
+          className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors active:scale-[0.97]"
+        >
+          <span className="material-symbols-outlined text-[18px]">image</span>
+          Download JPG
         </button>
         <button
           onClick={onNewTransaction}

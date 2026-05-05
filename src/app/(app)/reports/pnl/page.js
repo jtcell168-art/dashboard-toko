@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { getPnlData } from "@/app/actions/finance";
+import { exportToExcel } from "@/lib/utils/export";
 import { getCurrentUser } from "@/app/actions/auth";
 import { useBranch } from "@/context/BranchContext";
 
@@ -38,6 +39,40 @@ export default function PnLReportPage() {
   const prev = data[data.length - 2];
   const profitGrowth = prev && prev.profit > 0 ? (((latest.profit - prev.profit) / prev.profit) * 100).toFixed(1) : 0;
 
+  const handleDownloadJPG = () => {
+    const element = document.getElementById("pnl-content-area");
+    if (!element) return;
+
+    if (typeof window.htmlToImage === "undefined") {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
+      script.async = true;
+      script.onload = () => {
+        capture(element);
+      };
+      script.onerror = () => alert("Gagal memuat library pengolah gambar.");
+      document.head.appendChild(script);
+    } else {
+      capture(element);
+    }
+  };
+
+  const capture = (element) => {
+    window.htmlToImage.toJpeg(element, {
+      quality: 0.9,
+      backgroundColor: "#0f172a",
+      skipFonts: true,
+    }).then(dataUrl => {
+      const link = document.createElement("a");
+      link.download = `Laporan_Laba_Rugi_${new Date().toLocaleDateString("id-ID")}.jpg`;
+      link.href = dataUrl;
+      link.click();
+    }).catch(err => {
+      console.error("Capture failed", err);
+      alert("Gagal membuat gambar laporan. Silakan segarkan halaman.");
+    });
+  };
+
   if (!branchIsMounted) return null;
 
   if (currentUser && !["owner", "manager"].includes(currentUser.role)) {
@@ -57,6 +92,35 @@ export default function PnLReportPage() {
           <h1 className="text-xl md:text-2xl font-bold text-white">Laporan Laba Rugi</h1>
           <p className="text-sm text-white/40 mt-0.5">Analisis pendapatan dan pengeluaran — {selectedBranch === 'all' ? 'Semua Cabang' : 'Cabang Terpilih'}</p>
         </div>
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              const exportData = data.map(item => ({
+                Periode: item.label,
+                Pendapatan: item.revenue,
+                HPP: item.cogs,
+                Biaya: item.expenses,
+                Laba_Bersih: item.profit,
+                Margin: item.revenue > 0 ? ((item.profit / item.revenue) * 100).toFixed(1) + "%" : "0%"
+              }));
+              exportToExcel(exportData, "Laporan_Laba_Rugi");
+            }}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold flex items-center gap-2 hover:bg-emerald-500/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            Excel
+          </button>
+          
+          <button 
+            onClick={() => handleDownloadJPG()}
+            className="px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold flex items-center gap-2 hover:bg-indigo-500/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">image</span>
+            Download JPG
+          </button>
+        </div>
+      </div>
         
         {/* Date Filter */}
         <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-xl border border-white/10">
@@ -88,16 +152,16 @@ export default function PnLReportPage() {
             </button>
           )}
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="kpi-card indigo" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Pendapatan</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.revenue)}</p></div>
         <div className="kpi-card blue" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">HPP</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.cogs)}</p></div>
         <div className="kpi-card rose" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Biaya Operasional</p><p className="text-xl font-bold text-white tabular-nums">{formatRupiah(latest.expenses)}</p></div>
         <div className="kpi-card emerald" style={{ padding: 16 }}><p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-1">Laba Bersih</p><p className="text-xl font-bold text-emerald-400 tabular-nums">{formatRupiah(latest.profit)}</p><p className="text-[10px] text-emerald-400/60 mt-0.5">↑ {profitGrowth}% dari periode sebelumnya</p></div>
       </div>
 
-      <div className="chart-card"><h3 className="text-sm font-semibold text-white mb-4">Trend {(startDate || endDate) ? 'Harian' : 'Bulanan'}</h3>
+      <div id="pnl-content-area" className="flex flex-col gap-5">
+        <div className="chart-card"><h3 className="text-sm font-semibold text-white mb-4">Trend {(startDate || endDate) ? 'Harian' : 'Bulanan'}</h3>
         {isLoading ? (
           <div className="flex items-center justify-center h-[280px] text-white/30 text-sm animate-pulse">Memproses data...</div>
         ) : data.length > 0 ? (
@@ -118,6 +182,7 @@ export default function PnLReportPage() {
         ) : (
           <div className="p-8 text-center text-white/50 text-sm">Tidak ada data untuk ditampilkan.</div>
         )}
+      </div>
       </div>
     </div>
   );

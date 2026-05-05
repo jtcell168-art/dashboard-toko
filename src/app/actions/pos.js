@@ -412,3 +412,20 @@ export async function migrateImeiStatus() {
   if (error) return "Gagal migrasi: " + error.message;
   return "Berhasil migrasi status IMEI.";
 }
+
+export async function getTransactionDetail(transactionId) {
+  try {
+    const supabase = await createClient();
+    const { data: transaction, error } = await supabase
+      .from("transactions")
+      .select("*, profiles(full_name), branches(*), transaction_items(*)")
+      .eq("id", transactionId)
+      .single();
+
+    if (error) throw error;
+    return transaction;
+  } catch (err) {
+    console.error("Error fetching transaction detail:", err);
+    return null;
+  }
+}
