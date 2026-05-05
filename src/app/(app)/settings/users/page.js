@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { getUsers, updateUser, deleteUser } from "@/app/actions/users";
 import { getBranches } from "@/app/actions/branches";
+import { getCurrentUser } from "@/app/actions/auth";
 
 const roleColors = { owner: "#10B981", manager: "#8B5CF6", kasir: "#3B82F6", teknisi: "#F59E0B" };
 
@@ -9,6 +10,7 @@ export default function UsersSettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
   // Edit State
@@ -19,9 +21,10 @@ export default function UsersSettingsPage() {
   useEffect(() => {
     async function load() {
       setIsLoading(true);
-      const [uData, bData] = await Promise.all([getUsers(), getBranches()]);
+      const [uData, bData, user] = await Promise.all([getUsers(), getBranches(), getCurrentUser()]);
       setUsers(uData);
       setBranches(bData);
+      setCurrentUser(user);
       setIsLoading(false);
     }
     load();
@@ -112,7 +115,7 @@ export default function UsersSettingsPage() {
                     <option value="kasir">Kasir</option>
                     <option value="teknisi">Teknisi</option>
                     <option value="manager">Manager</option>
-                    <option value="owner">Owner</option>
+                    {currentUser?.role === 'owner' && <option value="owner">Owner</option>}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -166,7 +169,13 @@ export default function UsersSettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => (
+                {users
+                  .filter(u => {
+                    // Manager cannot see or edit Owner
+                    if (currentUser?.role === 'manager' && u.role === 'owner') return false;
+                    return true;
+                  })
+                  .map(u => (
                   <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
                     <td>
                       <div className="flex items-center gap-3">
