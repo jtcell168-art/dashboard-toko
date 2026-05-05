@@ -58,10 +58,23 @@ export default function PnLReportPage() {
   };
 
   const capture = (element) => {
+    const originalStyle = element.style.cssText;
+    element.style.width = "max-content";
+    element.style.height = "auto";
+    element.style.overflow = "visible";
+
+    const scrollContainer = element.querySelector('.overflow-x-auto');
+    const originalScrollStyle = scrollContainer ? scrollContainer.style.cssText : "";
+    if (scrollContainer) {
+      scrollContainer.style.overflow = "visible";
+      scrollContainer.style.width = "auto";
+    }
+
     window.htmlToImage.toJpeg(element, {
       quality: 0.9,
       backgroundColor: "#0f172a",
       skipFonts: true,
+      pixelRatio: 1.5,
     }).then(dataUrl => {
       const link = document.createElement("a");
       link.download = `Laporan_Laba_Rugi_${new Date().toLocaleDateString("id-ID")}.jpg`;
@@ -70,6 +83,9 @@ export default function PnLReportPage() {
     }).catch(err => {
       console.error("Capture failed", err);
       alert("Gagal membuat gambar laporan. Silakan segarkan halaman.");
+    }).finally(() => {
+      element.style.cssText = originalStyle;
+      if (scrollContainer) scrollContainer.style.cssText = originalScrollStyle;
     });
   };
 

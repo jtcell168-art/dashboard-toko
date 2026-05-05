@@ -329,14 +329,23 @@ export default function InventoryPage() {
 
   const captureInventory = (element) => {
     // Optimization for large datasets (200+ items)
-    const originalStyle = element.style.height;
+    const originalStyle = element.style.cssText;
+    element.style.width = "max-content";
     element.style.height = "auto";
+    element.style.overflow = "visible";
+
+    const scrollContainer = element.querySelector('.overflow-x-auto');
+    const originalScrollStyle = scrollContainer ? scrollContainer.style.cssText : "";
+    if (scrollContainer) {
+      scrollContainer.style.overflow = "visible";
+      scrollContainer.style.width = "auto";
+    }
     
     window.htmlToImage.toJpeg(element, { 
-      quality: 0.85, // Slightly lower quality for faster processing
+      quality: 0.85, 
       backgroundColor: "#0f172a",
       skipFonts: true,
-      pixelRatio: 1, // Crucial: avoid high-DPI scaling which makes the image 4x-9x larger
+      pixelRatio: 1, 
     })
       .then((dataUrl) => {
         const link = document.createElement("a");
@@ -349,7 +358,8 @@ export default function InventoryPage() {
         alert("Gagal membuat gambar. Daftar stok Anda mungkin terlalu panjang untuk diproses sebagai gambar. Disarankan gunakan Export Excel untuk data besar.");
       })
       .finally(() => {
-        element.style.height = originalStyle;
+        element.style.cssText = originalStyle;
+        if (scrollContainer) scrollContainer.style.cssText = originalScrollStyle;
         setIsCapturing(false);
       });
   };
