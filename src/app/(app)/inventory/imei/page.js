@@ -12,12 +12,56 @@ export default function IMEITrackingPage() {
   const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
-    // Currently no IMEI table in Supabase, simulating empty fetch
-    setRecords([]);
-    setIsLoading(false);
-  }, []);
+    async function loadImeiData() {
+      if (!search || search.length < 3) {
+        setRecords([]);
+        setIsLoading(false);
+        return;
+      }
 
-  const filtered = search.length >= 3 ? records.filter(r => r.imei.includes(search) || r.product.toLowerCase().includes(search.toLowerCase()) || (r.customer && r.customer.toLowerCase().includes(search.toLowerCase()))) : records;
+      setIsLoading(true);
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from("imei_records")
+        .select(`
+          imei,
+          status,
+          customer_name,
+          last_action,
+          created_at,
+          products ( name ),
+          branches ( name )
+        `)
+        .ilike("imei", `%${search}%`)
+        .limit(50);
+
+      if (error) {
+        console.error("Error fetching IMEI:", error);
+        setRecords([]);
+      } else {
+        const mapped = data.map(item => ({
+          imei: item.imei,
+          product: item.products?.name || "Produk Tidak Dikenal",
+          status: item.status,
+          branch: item.branches?.name || "Cabang Tidak Dikenal",
+          customer: item.customer_name || "—",
+          lastAction: item.last_action || (item.status === "stock" ? "Masuk Stok" : item.status),
+          date: new Date(item.created_at).toLocaleDateString("id-ID")
+        }));
+        setRecords(mapped);
+      }
+      setIsLoading(false);
+    }
+
+    const timer = setTimeout(() => {
+      loadImeiData();
+    }, 500); // Debounce search
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const filtered = records; // No need for extra filter since we search on server
 
   return (
     <div className="flex flex-col gap-5">

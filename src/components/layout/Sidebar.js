@@ -76,6 +76,15 @@ const MENU = [
     ],
   },
   {
+    label: "Kepegawaian",
+    icon: "badge",
+    href: "/hrd",
+    children: [
+      { label: "Absensi", href: "/hrd/attendance" },
+      { label: "Laporan Absensi", href: "/hrd/attendance/report" },
+    ],
+  },
+  {
     label: "Pengaturan",
     icon: "settings",
     href: "/settings",
@@ -89,7 +98,15 @@ const MENU = [
 
 export default function Sidebar({ collapsed, onToggle, user, isMobile = false }) {
   const pathname = usePathname();
-  const [expandedMenus, setExpandedMenus] = useState({});
+  const [expandedMenus, setExpandedMenus] = useState(() => {
+    const initial = {};
+    MENU.forEach(item => {
+      if (item.children?.some(c => pathname === c.href || pathname?.startsWith(c.href + "/"))) {
+        initial[item.label] = true;
+      }
+    });
+    return initial;
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -99,10 +116,12 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
   const role = user?.role || "kasir";
 
   const filteredMenu = useMemo(() => {
-    // ... same as before
     return MENU.map(item => {
       if (role === "teknisi") {
         if (item.label === "Dashboard") return item;
+        if (item.label === "Kepegawaian") {
+          return { ...item, children: item.children.filter(c => c.label === "Absensi") };
+        }
         if (item.label === "Point of Sale") {
           return { ...item, children: item.children.filter(c => c.label === "Servis HP") };
         }
@@ -112,6 +131,9 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
       if (role === "kasir") {
         if (item.label === "Pengaturan") return null;
         if (item.label === "Purchase Order") return null;
+        if (item.label === "Kepegawaian") {
+          return { ...item, children: item.children.filter(c => c.label === "Absensi") };
+        }
         if (item.label === "Keuangan") {
           return { ...item, children: item.children.filter(c => ["Kasbon Karyawan", "Cicilan"].includes(c.label)) };
         }
@@ -123,15 +145,14 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
     }).filter(Boolean);
   }, [role]);
 
-  // ... same as before
+  // Expand menu when pathname changes (e.g. manual navigation)
   useEffect(() => {
-    const initialExpanded = {};
-    filteredMenu.forEach((item) => {
-      if (item.children?.some((c) => pathname === c.href || pathname?.startsWith(c.href + "/"))) {
-        initialExpanded[item.label] = true;
-      }
-    });
-    setExpandedMenus((prev) => ({ ...prev, ...initialExpanded }));
+    const activeItem = filteredMenu.find(item => 
+      item.children?.some(c => pathname === c.href || pathname?.startsWith(c.href + "/"))
+    );
+    if (activeItem && !expandedMenus[activeItem.label]) {
+      setExpandedMenus(prev => ({ ...prev, [activeItem.label]: true }));
+    }
   }, [pathname, filteredMenu]);
 
   const toggleMenu = (label) => {

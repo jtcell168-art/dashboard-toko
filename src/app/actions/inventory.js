@@ -36,27 +36,33 @@ export async function getInventory(branchId = "all") {
       return [];
     }
     
-    // Fetch IMEI counts for all products to ensure sync
-    const { data: imeiCounts } = await supabase
+    // Pre-calculate IMEI counts for performance O(N+M)
+    const imeiCountsMap = {}; // product_id -> branch_id -> count
+    
+    // Fetch all stock IMEIs to ensure we don't miss anything (Limit 50k)
+    const { data: allImeis } = await supabase
       .from("imei_records")
       .select("product_id, branch_id")
-      .eq("status", "stock");
+      .eq("status", "stock")
+      .limit(50000);
+    
+    if (allImeis) {
+      allImeis.forEach(i => {
+        if (!imeiCountsMap[i.product_id]) imeiCountsMap[i.product_id] = {};
+        imeiCountsMap[i.product_id][i.branch_id] = (imeiCountsMap[i.product_id][i.branch_id] || 0) + 1;
+      });
+    }
 
     // Flatten categories and calculate real-time stock
     return data.map(p => {
-      const isHP = p.categories?.name === "HP";
+      const categoryName = Array.isArray(p.categories) ? p.categories[0]?.name : p.categories?.name;
+      const isHP = categoryName?.toUpperCase() === "HP";
       let filteredStock = p.stock || [];
       
-      if (isHP && imeiCounts) {
-        // Recalculate stock based on IMEI for HP
-        const branchCounts = {};
-        imeiCounts
-          .filter(i => i.product_id === p.id)
-          .forEach(i => {
-            branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
-          });
+      if (isHP && imeiCountsMap[p.id]) {
+        const branchCounts = imeiCountsMap[p.id];
         
-        // Map back to filteredStock structure
+        // Recalculate stock based on IMEI for HP
         filteredStock = filteredStock.map(s => ({
           ...s,
           quantity: branchCounts[s.branch_id] || 0
@@ -77,7 +83,7 @@ export async function getInventory(branchId = "all") {
 
       return {
         ...p,
-        category: p.categories?.name || "Uncategorized",
+        category: categoryName || "Uncategorized",
         stock: filteredStock
       };
     });
@@ -139,30 +145,18 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
         const qty = Number(initialStockMap[branchId]);
         if (qty <= 0) continue;
 
-        // Cek apakah sudah ada baris stok untuk produk & cabang ini
-        const { data: existingStock } = await supabase
+        const { error: stockError } = await supabase
           .from("stock")
-          .select("id, quantity")
-          .eq("product_id", productId)
-          .eq("branch_id", branchId)
-          .maybeSingle();
+          .upsert({ 
+            product_id: productId, 
+            branch_id: branchId, 
+            quantity: qty,
+            updated_at: new Date().toISOString()
+          }, { 
+            onConflict: 'product_id,branch_id' 
+          });
 
-        if (existingStock) {
-          // Tambahkan stok ke yang sudah ada
-          await supabase
-            .from("stock")
-            .update({ quantity: (existingStock.quantity || 0) + qty })
-            .eq("id", existingStock.id);
-        } else {
-          // Buat baris stok baru
-          await supabase
-            .from("stock")
-            .insert({
-              product_id: productId,
-              branch_id: branchId,
-              quantity: qty
-            });
-        }
+        if (stockError) console.error(`Gagal simpan stok cabang ${branchId}:`, stockError);
       }
     }
 
