@@ -397,6 +397,51 @@ export async function bulkImportProducts(productsArray) {
   }
 }
 
+// SUBMIT STOCK TRANSFER
+export async function submitTransfer(data) {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { productId, fromBranchId, toBranchId, quantity, imeis = [] } = data;
+
+    // Insert transfer record
+    const { data: transfer, error: transferError } = await supabase
+      .from("stock_transfers")
+      .insert({
+        product_id: productId,
+        from_branch_id: fromBranchId,
+        to_branch_id: toBranchId,
+        quantity: quantity,
+        status: "in_transit",
+        transferred_by: user.id
+      })
+      .select()
+      .single();
+
+    if (transferError) throw new Error(transferError.message);
+
+    // If there are IMEIs, update their status to 'transfer'
+    if (imeis && imeis.length > 0) {
+      for (const imei of imeis) {
+        await supabase
+          .from("imei_records")
+          .update({
+            status: "transfer",
+            last_action: `transfer_${transfer.id}`,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", imei.id);
+      }
+    }
+
+    return { success: true, data: transfer };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 // RECEIVE STOCK TRANSFER
 export async function receiveTransfer(transferId) {
   try {
@@ -460,6 +505,26 @@ export async function receiveTransfer(transferId) {
           branch_id: transfer.to_branch_id,
           quantity: transfer.quantity
         });
+    }
+
+    // Update IMEI records if they were transferred
+    const { data: transferredImeis } = await supabase
+      .from("imei_records")
+      .select("id")
+      .eq("last_action", `transfer_${transferId}`)
+      .eq("status", "transfer");
+
+    if (transferredImeis && transferredImeis.length > 0) {
+      for (const imei of transferredImeis) {
+        await supabase
+          .from("imei_records")
+          .update({
+            status: "stock",
+            branch_id: transfer.to_branch_id,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", imei.id);
+      }
     }
 
     // 4. Update status transfer

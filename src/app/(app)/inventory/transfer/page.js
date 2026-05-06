@@ -1,53 +1,128 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { receiveTransfer } from "@/app/actions/inventory";
+import { receiveTransfer, submitTransfer } from "@/app/actions/inventory";
+import { getPosProducts } from "@/app/actions/pos";
+import IMEISelector from "@/components/pos/IMEISelector";
 
 const statusStyle = { completed: { bg: "rgba(16,185,129,0.12)", color: "#34D399", label: "Selesai" }, in_transit: { bg: "rgba(245,158,11,0.12)", color: "#FBBF24", label: "Dalam Kirim" } };
 
 export default function TransferStokPage() {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ product: "", from: "", to: "", qty: 1 });
   
+  const [fromBranch, setFromBranch] = useState("");
+  const [toBranch, setToBranch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [qty, setQty] = useState(1);
+  const [selectedImeis, setSelectedImeis] = useState([]);
+  
+  const [showImeiSelector, setShowImeiSelector] = useState(false);
+
   const [transfers, setTransfers] = useState([]);
-  const [products, setProducts] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [branchProducts, setBranchProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const [transfersRes, productsRes, branchesRes] = await Promise.all([
+      const [transfersRes, branchesRes] = await Promise.all([
         supabase.from('stock_transfers').select('*, products(name), profiles(full_name), from_branch:branches!from_branch_id(name), to_branch:branches!to_branch_id(name)').order('created_at', { ascending: false }),
-        supabase.from('products').select('id, name, sku').eq('is_active', true),
         supabase.from('branches').select('id, name').eq('is_active', true)
       ]);
       setTransfers(transfersRes.data || []);
-      setProducts(productsRes.data || []);
       setBranches(branchesRes.data || []);
       setIsLoading(false);
     }
     load();
   }, []);
 
-  const handleSubmit = async () => { 
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { error } = await supabase.from('stock_transfers').insert({
-        product_id: form.product,
-        from_branch_id: form.from,
-        to_branch_id: form.to,
-        quantity: form.qty,
-        status: 'in_transit',
-        transferred_by: user?.id
+  useEffect(() => {
+    if (fromBranch) {
+      setIsLoadingProducts(true);
+      getPosProducts(fromBranch).then(data => {
+        setBranchProducts(data.filter(p => p.totalStock > 0));
+        setIsLoadingProducts(false);
       });
-      if (error) throw error;
+      setSelectedProduct(null);
+      setSearchQuery("");
+      setSelectedImeis([]);
+      setQty(1);
+    } else {
+      setBranchProducts([]);
+      setSelectedProduct(null);
+      setSearchQuery("");
+      setSelectedImeis([]);
+      setQty(1);
+    }
+  }, [fromBranch]);
+
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery) return [];
+    const q = searchQuery.toLowerCase();
+    return branchProducts.filter(p => 
+      p.name.toLowerCase().includes(q) || 
+      p.sku.toLowerCase().includes(q) || 
+      (p.imeis && p.imeis.some(i => i.toLowerCase().includes(q)))
+    ).slice(0, 10);
+  }, [searchQuery, branchProducts]);
+
+  const handleSelectProduct = (product) => {
+    setSelectedProduct(product);
+    setSearchQuery("");
+    setSelectedImeis([]);
+    
+    if (product.category === 'HP') {
+      setQty(0);
+      setShowImeiSelector(true);
+    } else {
+      setQty(1);
+    }
+  };
+
+  const handleSelectImei = (imeiObj) => {
+    if (!selectedImeis.find(i => i.id === imeiObj.id)) {
+      const newImeis = [...selectedImeis, imeiObj];
+      setSelectedImeis(newImeis);
+      setQty(newImeis.length);
+    }
+  };
+
+  const handleSubmit = async () => { 
+    if (!selectedProduct || !fromBranch || !toBranch) return;
+    
+    if (selectedProduct.category === 'HP' && selectedImeis.length === 0) {
+      alert("Pilih IMEI terlebih dahulu untuk produk HP.");
+      return;
+    }
+    
+    const finalQty = selectedProduct.category === 'HP' ? selectedImeis.length : Number(qty);
+    if (finalQty <= 0) {
+      alert("Jumlah transfer minimal 1.");
+      return;
+    }
+
+    try {
+      const res = await submitTransfer({
+        productId: selectedProduct.id,
+        fromBranchId: fromBranch,
+        toBranchId: toBranch,
+        quantity: finalQty,
+        imeis: selectedImeis
+      });
+      
+      if (!res.success) throw new Error(res.error);
 
       alert(`Transfer berhasil diajukan!`); 
       setShowForm(false); 
-      setForm({ product: "", from: "", to: "", qty: 1 }); 
+      setFromBranch("");
+      setToBranch("");
+      setSelectedProduct(null);
+      setSearchQuery("");
+      setSelectedImeis([]);
+      setQty(1);
       window.location.reload();
     } catch (e) {
       alert("Gagal melakukan transfer: " + e.message);
@@ -79,14 +154,121 @@ export default function TransferStokPage() {
       {showForm && (
         <div className="glass-card p-5 flex flex-col gap-4 animate-fade-slide-up">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2"><span className="material-symbols-outlined text-[18px] text-indigo-400">swap_horiz</span>Form Transfer</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Produk</label><select className="input-field" value={form.product} onChange={e => setForm({...form, product: e.target.value})}><option value="">Pilih produk</option>{products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}</select></div>
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Jumlah</label><input className="input-field" type="number" min="1" value={form.qty} onChange={e => setForm({...form, qty: e.target.value})} /></div>
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Dari Cabang</label><select className="input-field" value={form.from} onChange={e => setForm({...form, from: e.target.value})}><option value="">Pilih asal</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-            <div className="flex flex-col gap-1.5"><label className="text-xs text-white/40">Ke Cabang</label><select className="input-field" value={form.to} onChange={e => setForm({...form, to: e.target.value})}><option value="">Pilih tujuan</option>{branches.filter(b => b.id !== form.from).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            <div className="flex flex-col gap-1.5 z-[100]">
+              <label className="text-xs text-white/40">Dari Cabang</label>
+              <select className="input-field" value={fromBranch} onChange={e => setFromBranch(e.target.value)}>
+                <option value="">Pilih asal</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5 z-[100]">
+              <label className="text-xs text-white/40">Ke Cabang</label>
+              <select className="input-field" value={toBranch} onChange={e => setToBranch(e.target.value)}>
+                <option value="">Pilih tujuan</option>
+                {branches.filter(b => b.id !== fromBranch).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5 relative z-50">
+              <label className="text-xs text-white/40">Produk</label>
+              {!selectedProduct ? (
+                <div className="relative">
+                  <input 
+                    className="input-field w-full" 
+                    placeholder={!fromBranch ? "Pilih cabang asal dulu" : (isLoadingProducts ? "Memuat produk..." : "Ketik nama, SKU, atau IMEI...")} 
+                    value={searchQuery} 
+                    onChange={e => setSearchQuery(e.target.value)} 
+                    disabled={!fromBranch || isLoadingProducts}
+                  />
+                  {searchQuery && filteredProducts.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[100]">
+                      {filteredProducts.map(p => (
+                        <button 
+                          key={p.id} 
+                          onClick={() => handleSelectProduct(p)}
+                          className="w-full text-left px-4 py-3 hover:bg-white/5 border-b border-white/5 last:border-0"
+                        >
+                          <div className="text-sm text-white font-medium">{p.name}</div>
+                          <div className="text-xs text-white/40">SKU: {p.sku} • Stok Tersedia: {p.totalStock}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchQuery && filteredProducts.length === 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl p-4 text-center text-sm text-white/40 z-[100]">
+                      Produk tidak ditemukan.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between input-field bg-white/5 w-full">
+                  <div>
+                    <div className="text-sm text-white">{selectedProduct.name}</div>
+                    <div className="text-xs text-white/40">SKU: {selectedProduct.sku} • Stok: {selectedProduct.totalStock}</div>
+                  </div>
+                  <button onClick={() => { setSelectedProduct(null); setSelectedImeis([]); setQty(1); }} className="text-white/40 hover:text-white">
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5 z-40">
+              <label className="text-xs text-white/40">Jumlah</label>
+              {selectedProduct?.category === 'HP' ? (
+                <div className="flex items-center gap-2">
+                  <input className="input-field flex-1 opacity-60" readOnly value={selectedImeis.length} />
+                  <button onClick={() => setShowImeiSelector(true)} className="btn-gradient px-3 py-2 text-xs rounded-xl flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[16px]">qr_code_scanner</span> Pilih IMEI
+                  </button>
+                </div>
+              ) : (
+                <input 
+                  className="input-field w-full" 
+                  type="number" 
+                  min="1" 
+                  max={selectedProduct?.totalStock || 1} 
+                  value={qty} 
+                  onChange={e => setQty(e.target.value)} 
+                  disabled={!selectedProduct}
+                />
+              )}
+            </div>
+            
+            {/* Selected IMEIs List */}
+            {selectedProduct?.category === 'HP' && selectedImeis.length > 0 && (
+              <div className="col-span-1 sm:col-span-2 flex flex-wrap gap-2 mt-1">
+                {selectedImeis.map(imei => (
+                  <div key={imei.id} className="flex items-center gap-1.5 bg-indigo-500/20 text-indigo-300 text-xs px-2.5 py-1.5 rounded-lg border border-indigo-500/30">
+                    <span className="font-mono">{imei.imei}</span>
+                    <button onClick={() => {
+                      const newImeis = selectedImeis.filter(i => i.id !== imei.id);
+                      setSelectedImeis(newImeis);
+                      setQty(newImeis.length);
+                    }} className="hover:text-white transition-colors">
+                      <span className="material-symbols-outlined text-[14px]">close</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
           </div>
-          <button onClick={handleSubmit} disabled={!form.product || !form.from || !form.to} className="btn-gradient py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-40"><span className="material-symbols-outlined text-[18px]">check</span>Proses Transfer</button>
+          <button onClick={handleSubmit} disabled={!selectedProduct || !fromBranch || !toBranch || (selectedProduct?.category === 'HP' ? selectedImeis.length === 0 : qty < 1)} className="btn-gradient py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-40 mt-2"><span className="material-symbols-outlined text-[18px]">check</span>Proses Transfer</button>
         </div>
+      )}
+
+      {showImeiSelector && selectedProduct && (
+        <IMEISelector
+          productId={selectedProduct.id}
+          branchId={fromBranch}
+          selectedImeis={selectedImeis}
+          onSelect={handleSelectImei}
+          onClose={() => setShowImeiSelector(false)}
+        />
       )}
 
       <div className="glass-card overflow-hidden">
