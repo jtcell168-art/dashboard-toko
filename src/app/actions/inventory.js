@@ -466,7 +466,20 @@ export async function submitTransfer(data) {
 
     const { productId, fromBranchId, toBranchId, quantity, imeis = [] } = data;
 
-    // Insert transfer record
+    // 1. Cek dan Kurangi stok dari cabang asal (DILAKUKAN SAAT KIRIM)
+    const { data: fromStock } = await supabase
+      .from("stock")
+      .select("id, quantity")
+      .eq("product_id", productId)
+      .eq("branch_id", fromBranchId)
+      .single();
+
+    const currentFromQty = fromStock ? fromStock.quantity : 0;
+    if (currentFromQty < quantity) {
+      throw new Error("Stok cabang asal tidak mencukupi untuk melakukan transfer ini.");
+    }
+
+    // 2. Insert transfer record
     const { data: transfer, error: transferError } = await supabase
       .from("stock_transfers")
       .insert({
@@ -482,7 +495,13 @@ export async function submitTransfer(data) {
 
     if (transferError) throw new Error(transferError.message);
 
-    // If there are IMEIs, update their status to 'transfer'
+    // 3. Update stok di tabel stock (Kurangi dari asal)
+    await supabase
+      .from("stock")
+      .update({ quantity: currentFromQty - quantity })
+      .eq("id", fromStock.id);
+
+    // 4. If there are IMEIs, update their status to 'transfer'
     if (imeis && imeis.length > 0) {
       for (const imei of imeis) {
         await supabase
@@ -494,6 +513,9 @@ export async function submitTransfer(data) {
           })
           .eq("id", imei.id);
       }
+      
+      // Sinkronisasi stok asal setelah IMEI diubah statusnya menjadi 'transfer'
+      await syncStockWithImeis(supabase, productId, fromBranchId);
     }
 
     return { success: true, data: transfer };
@@ -524,26 +546,7 @@ export async function receiveTransfer(transferId) {
       throw new Error("Hanya staff cabang tujuan, Owner, atau Manager yang bisa menerima barang.");
     }
 
-    // 2. Kurangi stok dari cabang asal
-    const { data: fromStock } = await supabase
-      .from("stock")
-      .select("quantity")
-      .eq("product_id", transfer.product_id)
-      .eq("branch_id", transfer.from_branch_id)
-      .single();
-
-    const currentFromQty = fromStock ? fromStock.quantity : 0;
-    if (currentFromQty < transfer.quantity) {
-      throw new Error("Stok cabang asal tidak mencukupi untuk menyelesaikan transfer ini.");
-    }
-
-    await supabase
-      .from("stock")
-      .update({ quantity: currentFromQty - transfer.quantity })
-      .eq("product_id", transfer.product_id)
-      .eq("branch_id", transfer.from_branch_id);
-
-    // 3. Tambahkan stok ke cabang tujuan
+    // 2. Tambahkan stok ke cabang tujuan (Stok asal sudah dikurangi saat submitTransfer)
     const { data: toStock } = await supabase
       .from("stock")
       .select("quantity")
@@ -598,9 +601,44 @@ export async function receiveTransfer(transferId) {
 
     if (updateError) throw updateError;
 
+    // 5. Sinkronisasi stok kedua cabang (PENTING untuk HP agar data tabel stock valid)
+    await syncStockWithImeis(supabase, transfer.product_id, transfer.from_branch_id);
+    await syncStockWithImeis(supabase, transfer.product_id, transfer.to_branch_id);
+
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+}
+
+// HELPER: Sinkronisasi tabel stock dengan jumlah IMEI (Source of Truth)
+async function syncStockWithImeis(supabase, productId, branchId) {
+  try {
+    const { data: product } = await supabase
+      .from("products")
+      .select("*, categories(name)")
+      .eq("id", productId)
+      .single();
+
+    if (product?.categories?.name?.trim().toUpperCase() === "HP") {
+      const { count } = await supabase
+        .from("imei_records")
+        .select("*", { count: 'exact', head: true })
+        .eq("product_id", productId)
+        .eq("branch_id", branchId)
+        .eq("status", "stock");
+
+      await supabase
+        .from("stock")
+        .upsert({
+          product_id: productId,
+          branch_id: branchId,
+          quantity: count || 0,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'product_id,branch_id' });
+    }
+  } catch (err) {
+    console.error("Error syncing stock with IMEIs:", err);
   }
 }
 

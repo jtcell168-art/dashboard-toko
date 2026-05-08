@@ -949,22 +949,34 @@ export default function InventoryPage() {
             </div>
 
             <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
-              <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">inventory_2</span>
-                Update Stok per Cabang
-              </h4>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+                  Update Stok per Cabang
+                </h4>
+                {editForm.category === "HP" ? (
+                  <span className="text-[9px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 animate-pulse">
+                    Otomatis dari Jumlah IMEI
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
+                    Input Manual
+                  </span>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-white/30 uppercase">Ruteng</label>
-                  <input type="number" className="input-field text-center font-bold" min="0" value={editForm.stockA} onChange={e => setEditForm({...editForm, stockA: e.target.value})} />
+                  <input type="number" className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} readOnly={editForm.category === "HP"} min="0" value={editForm.stockA} onChange={e => setEditForm({...editForm, stockA: e.target.value})} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-white/30 uppercase">Larantuka</label>
-                  <input type="number" className="input-field text-center font-bold" min="0" value={editForm.stockB} onChange={e => setEditForm({...editForm, stockB: e.target.value})} />
+                  <input type="number" className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} readOnly={editForm.category === "HP"} min="0" value={editForm.stockB} onChange={e => setEditForm({...editForm, stockB: e.target.value})} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-white/30 uppercase">Riung</label>
-                  <input type="number" className="input-field text-center font-bold" min="0" value={editForm.stockC} onChange={e => setEditForm({...editForm, stockC: e.target.value})} />
+                  <input type="number" className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} readOnly={editForm.category === "HP"} min="0" value={editForm.stockC} onChange={e => setEditForm({...editForm, stockC: e.target.value})} />
                 </div>
               </div>
             </div>
