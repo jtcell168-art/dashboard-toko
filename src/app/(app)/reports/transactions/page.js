@@ -80,7 +80,10 @@ export default function TransactionReportPage() {
       Tipe: t.type,
       Kasir: t.profiles?.full_name,
       Customer: t.customer_name,
+      No_HP: t.customer_phone || "-",
+      Alamat: t.customer_address || "-",
       Metode_Bayar: t.payment_method,
+
       Keterangan: t.notes || "-",
       Total: t.total,
       Status: t.status

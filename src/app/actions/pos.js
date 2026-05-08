@@ -53,22 +53,15 @@ export async function getPosProducts(branchId = "all") {
       if (isHP && imeiList) {
         const productRelatedImeis = imeiList.filter(i => i.product_id === product.id);
         
-        // Filter IMEIs by branch if needed
-        let branchFilteredImeis = productRelatedImeis;
-        if (branchId !== "all" && user?.role !== "owner" && user?.role !== "manager") {
-          branchFilteredImeis = productRelatedImeis.filter(i => i.branch_id === branchId);
-        } else if (branchId !== "all") {
-           // If owner/manager selected a specific branch
-           branchFilteredImeis = productRelatedImeis.filter(i => i.branch_id === branchId);
-        }
-        
-        productImeis = branchFilteredImeis.map(i => i.imei);
+        productImeis = productRelatedImeis.map(i => i.imei);
+
 
         // Calculate stock based on available IMEIs
         const branchCounts = {};
-        branchFilteredImeis.forEach(i => {
+        productRelatedImeis.forEach(i => {
           branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
         });
+
         
         // Map back to stock structure
         filteredStock = filteredStock.map(s => ({
@@ -136,7 +129,7 @@ export async function getAvailableImeis(productId, branchId) {
 }
 
 // Proses Transaksi
-export async function processTransaction(cart, discountAmount, paymentMethod, customerName, branchId, userId, customerPhone = "", creditProvider = "", discountPercent = 0, installmentData = null) {
+export async function processTransaction(cart, discountAmount, paymentMethod, customerName, branchId, userId, customerPhone = "", creditProvider = "", discountPercent = 0, installmentData = null, customerAddress = "") {
   const supabase = await createClient();
   
   const subtotal = cart.reduce((sum, item) => sum + item.sellPrice * item.qty, 0);
@@ -150,6 +143,7 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
       type: "retail",
       customer_name: customerName,
       customer_phone: customerPhone,
+      customer_address: customerAddress,
       branch_id: branchId === "all" ? null : branchId,
       cashier_id: userId,
       subtotal: subtotal,
@@ -162,6 +156,7 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
     })
     .select()
     .single();
+
 
   if (trxError) throw new Error(trxError.message);
 
@@ -219,8 +214,12 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
               .from("imei_records")
               .update({ 
                 status: "sold", 
-                sold_at: new Date().toISOString()
+                sold_at: new Date().toISOString(),
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                customer_address: customerAddress
               })
+
               .eq("id", imei.id);
           }
         }

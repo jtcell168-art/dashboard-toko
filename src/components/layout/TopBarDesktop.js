@@ -1,11 +1,15 @@
+"use client";
 import { useState, useEffect } from "react";
+
 import { createClient } from "@/lib/supabase/client";
 import { useBranch } from "@/context/BranchContext";
 import { getNotifications, markAsRead, markAllAsRead } from "@/app/actions/notifications";
 
 export default function TopBarDesktop({ sidebarWidth = 256, user }) {
   const { selectedBranch, changeBranch } = useBranch();
+  const [isMounted, setIsMounted] = useState(false);
   const [showBranches, setShowBranches] = useState(false);
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [branches, setBranches] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -14,7 +18,9 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   useEffect(() => {
+    setIsMounted(true);
     async function loadBranches() {
+
       const supabase = createClient();
       const { data } = await supabase.from("branches").select("id, name").eq("is_active", true);
       if (data) {
@@ -60,8 +66,11 @@ export default function TopBarDesktop({ sidebarWidth = 256, user }) {
 
   const currentBranch = branches.find((b) => b.id === selectedBranch) || (branches.length > 0 ? branches[0] : { id: "all", label: "Semua Cabang" });
 
+  if (!isMounted) return <header className="topbar-desktop hidden md:flex" style={{ left: sidebarWidth }}></header>;
+
   return (
     <header
+
       className="topbar-desktop hidden md:flex"
       style={{ left: sidebarWidth }}
     >

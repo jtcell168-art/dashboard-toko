@@ -8,7 +8,11 @@ export async function getInventory(branchId = "all") {
     const supabase = await createClient();
     const user = await getCurrentUser();
     
+    // Fetch branches for mapping if needed
+    const { data: branches } = await supabase.from("branches").select("id, name");
+
     let query = supabase
+
       .from("products")
       .select(`
         *,
@@ -42,7 +46,8 @@ export async function getInventory(branchId = "all") {
     // Fetch all stock IMEIs to ensure we don't miss anything (Limit 50k)
     const { data: allImeis } = await supabase
       .from("imei_records")
-      .select("product_id, branch_id")
+      .select("product_id, branch_id, imei")
+
       .eq("status", "stock")
       .limit(50000);
     
@@ -55,38 +60,60 @@ export async function getInventory(branchId = "all") {
 
     // Flatten categories and calculate real-time stock
     return data.map(p => {
-      const categoryName = Array.isArray(p.categories) ? p.categories[0]?.name : p.categories?.name;
-      const isHP = categoryName?.toUpperCase() === "HP";
+      let categoryName = "Uncategorized";
+      if (p.categories) {
+        categoryName = Array.isArray(p.categories) ? p.categories[0]?.name : p.categories?.name;
+      }
+      
+      const isHP = categoryName?.trim().toUpperCase() === "HP";
       let filteredStock = p.stock || [];
       
+      // For HP, we overwrite the quantity from the stock table with actual IMEI counts
       if (isHP && imeiCountsMap[p.id]) {
         const branchCounts = imeiCountsMap[p.id];
         
-        // Recalculate stock based on IMEI for HP
+        // Update existing stock records
         filteredStock = filteredStock.map(s => ({
           ...s,
           quantity: branchCounts[s.branch_id] || 0
         }));
-
-        // Add missing branches if they have IMEIs but no stock record yet
+ 
+        // Add branches that have IMEIs but no stock record
         Object.entries(branchCounts).forEach(([bId, count]) => {
-          if (!filteredStock.find(s => s.branch_id === bId)) {
-            filteredStock.push({ branch_id: bId, quantity: count });
+          if (!filteredStock.some(s => s.branch_id === bId)) {
+            filteredStock.push({ 
+              branch_id: bId, 
+              quantity: count,
+              branches: { name: branches.find(b => b.id === bId)?.name || "Cabang Lain" }
+            });
           }
         });
       }
-
+ 
       // Filter by branch for staff
       if (branchId !== "all" && user?.role !== "owner" && user?.role !== "manager") {
         filteredStock = filteredStock.filter(s => s.branch_id === branchId);
       }
 
+      // Add actual IMEI strings for export
+      const imeiData = allImeis?.filter(i => i.product_id === p.id) || [];
+      const imeiStrings = {};
+      branches?.forEach(b => {
+        imeiStrings[b.id] = imeiData
+          .filter(i => i.branch_id === b.id)
+          .map(i => i.imei)
+          .join(", ");
+      });
+ 
       return {
         ...p,
         category: categoryName || "Uncategorized",
-        stock: filteredStock
+        stock: filteredStock,
+        imeiStrings // { branch_id: "imei1, imei2..." }
       };
     });
+
+
   } catch (err) {
     console.error("Critical error in getInventory:", err);
     return [];
@@ -384,6 +411,39 @@ export async function bulkImportProducts(productsArray) {
           if (stockError) console.error("Stock error for SKU " + item.sku, stockError);
         }
 
+        // 4. Process IMEIs if HP
+        if (item.category?.toUpperCase() === "HP" || product.category_id) {
+          const imeiInserts = [];
+          
+          const processImeis = (str, branchId) => {
+            if (!str) return;
+            const list = str.split(/[\n, ]+/).filter(i => i.trim() !== "");
+            list.forEach(imei => {
+              imeiInserts.push({
+                product_id: product.id,
+                branch_id: branchId,
+                imei: imei.trim(),
+                status: "stock",
+                last_action: "Import Excel",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+            });
+          };
+
+          if (branchMap.ruteng) processImeis(item.imeiRuteng, branchMap.ruteng);
+          if (branchMap.larantuka) processImeis(item.imeiLarantuka, branchMap.larantuka);
+          if (branchMap.riung) processImeis(item.imeiRiung, branchMap.riung);
+
+          if (imeiInserts.length > 0) {
+            // Use upsert to avoid duplicate key errors if re-importing
+            const { error: imeiError } = await supabase
+              .from("imei_records")
+              .upsert(imeiInserts, { onConflict: 'imei' });
+            if (imeiError) console.error("IMEI error for SKU " + item.sku, imeiError);
+          }
+        }
+
         successCount++;
       } catch (e) {
         console.error("Error importing SKU " + item.sku, e);
@@ -543,3 +603,109 @@ export async function receiveTransfer(transferId) {
     return { success: false, error: err.message };
   }
 }
+
+// UPDATE IMEI RECORD
+export async function updateImeiRecord(originalImei, updateData) {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "owner" && user.role !== "manager")) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const { error } = await supabase
+      .from("imei_records")
+      .update({
+        ...updateData,
+        updated_at: new Date().toISOString()
+      })
+      .eq("imei", originalImei.trim());
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// DELETE IMEI RECORD
+export async function deleteImeiRecord(imei) {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "owner" && user.role !== "manager")) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const { error } = await supabase
+      .from("imei_records")
+      .delete()
+      .eq("imei", imei.trim());
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ADD SINGLE IMEI RECORD
+export async function addImeiRecord(data) {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "owner" && user.role !== "manager")) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Check if exists first to provide better message
+    const { data: existing, error: checkError } = await supabase
+      .from("imei_records")
+      .select("product_id, products(name)")
+      .eq("imei", data.imei)
+      .maybeSingle();
+
+    if (existing) {
+      const productName = existing.products?.name || "Produk Lain";
+      return { 
+        success: false, 
+        error: `IMEI ini sudah terdaftar di "${productName}". Hapus dulu dari sana jika ingin dipindah.` 
+      };
+    }
+
+    const { error } = await supabase
+      .from("imei_records")
+      .insert({
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+
+// SEARCH PRODUCT BY IMEI
+export async function searchProductByImei(imei) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("imei_records")
+      .select("product_id")
+      .ilike("imei", `%${imei}%`)
+      .limit(20);
+    
+    if (error) throw error;
+    return data.map(d => d.product_id);
+  } catch (err) {
+    console.error("Search IMEI error:", err);
+    return [];
+  }
+}
+
+
+

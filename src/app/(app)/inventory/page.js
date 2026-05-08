@@ -2,14 +2,19 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
-import { getInventory, addProduct, updateProduct, deleteProduct, updateProductPrice, getPriceHistory, bulkImportProducts } from "@/app/actions/inventory";
+import { getInventory, addProduct, updateProduct, deleteProduct, updateProductPrice, getPriceHistory, bulkImportProducts, addImeiRecord, updateImeiRecord, deleteImeiRecord, searchProductByImei } from "@/app/actions/inventory";
 import * as XLSX from "xlsx";
 import { fixNokiaStock, migrateImeiStatus } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
 import { getBranches } from "@/app/actions/branches";
 import { exportToExcel } from "@/lib/utils/export";
 import { useBranch } from "@/context/BranchContext";
+import { createClient } from "@/lib/supabase/client";
 import IMEIScanner from "@/components/inventory/IMEIScanner";
+
+import Scanner from "@/components/Scanner";
+
+
 
 const CATEGORIES = ["Semua", "HP", "Aksesori", "Sparepart", "Kartu Perdana"];
 const ADD_CATEGORIES = ["HP", "Aksesori", "Sparepart", "Kartu Perdana"];
@@ -20,7 +25,8 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("Semua");
   const [sortBy, setSortBy] = useState("name");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0" });
+  const [addForm, setAddForm] = useState({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0", colors: "" });
+
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
 
@@ -41,6 +47,10 @@ export default function InventoryPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [manageImeiProduct, setManageImeiProduct] = useState(null); // { id, name, category }
+  const [matchingImeiIds, setMatchingImeiIds] = useState([]);
+
+
 
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
@@ -65,7 +75,11 @@ export default function InventoryPage() {
           sellPrice: Number(row["Harga Jual"] || row["Harga_Jual"] || row.sellPrice || 0),
           stockRuteng: Number(row["Stok Ruteng"] || row["Stok_Ruteng"] || row.stockRuteng || 0),
           stockLarantuka: Number(row["Stok Larantuka"] || row["Stok_Larantuka"] || row.stockLarantuka || 0),
-          stockRiung: Number(row["Stok Riung"] || row["Stok_Riung"] || row.stockRiung || 0)
+          stockRiung: Number(row["Stok Riung"] || row["Stok_Riung"] || row.stockRiung || 0),
+          // IMEI columns
+          imeiRuteng: row["IMEI Ruteng"] || row.imeiRuteng || row.IMEI || "",
+          imeiLarantuka: row["IMEI Larantuka"] || row.imeiLarantuka || "",
+          imeiRiung: row["IMEI Riung"] || row.imeiRiung || ""
         })).filter(p => p.name && p.sku);
 
         if (formatted.length === 0) {
@@ -120,7 +134,8 @@ export default function InventoryPage() {
           buyPrice: p.purchase_price,
           sellPrice: p.retail_price,
           stocks,
-          originalStock: p.stock
+          originalStock: p.stock,
+          imeiStrings: p.imeiStrings
         };
       });
       setDbProducts(mapped);
@@ -128,6 +143,19 @@ export default function InventoryPage() {
     }
     loadData();
   }, [selectedBranch, branchIsMounted]);
+
+  useEffect(() => {
+    async function searchImei() {
+      if (search.length >= 4) {
+        const ids = await searchProductByImei(search);
+        setMatchingImeiIds(ids);
+      } else {
+        setMatchingImeiIds([]);
+      }
+    }
+    const timer = setTimeout(searchImei, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const hasAccess = currentUser?.role === "owner" || currentUser?.role === "manager";
   const canSeeBuyPrice = currentUser?.role === "owner" || currentUser?.role === "manager";
@@ -145,9 +173,10 @@ export default function InventoryPage() {
         (p) =>
           p.name.toLowerCase().includes(q) ||
           p.sku.toLowerCase().includes(q) ||
-          (p.originalStock && p.originalStock.some(s => s.imei_records && s.imei_records.some(i => i.imei.toLowerCase().includes(q))))
+          matchingImeiIds.includes(p.id)
       );
     }
+
 
     if (sortBy === "stock-low") {
       items.sort((a, b) => {
@@ -177,6 +206,7 @@ export default function InventoryPage() {
 
   const handleAddProduct = async () => {
     try {
+      const colors = addForm.colors ? addForm.colors.split(/[,]+/).map(c => c.trim()).filter(c => c !== "") : [""];
       const stockData = {};
       branches.forEach(b => {
         if (b.name.toLowerCase().includes("ruteng")) stockData[b.id] = Number(addForm.stockA);
@@ -185,29 +215,67 @@ export default function InventoryPage() {
         else stockData[b.id] = 0;
       });
 
-      await addProduct(
-        {
-          name: addForm.name,
-          sku: addForm.sku,
-          category: addForm.category,
-          purchasePrice: Number(addForm.buyPrice),
-          retailPrice: Number(addForm.sellPrice),
-        },
-        stockData,
-        imeiList
-      );
-      alert("Produk berhasil ditambah!");
+      // Automatically include IMEIs from the textarea if user forgot to click "Tambah"
+      let finalImeiList = [...imeiList];
+      if (manualImei && selectedManualBranch) {
+        const extraImeis = manualImei.split(/[\n, ]+/).filter(i => i.trim() !== "");
+        extraImeis.forEach(imei => {
+          if (!finalImeiList.find(fi => fi.imei === imei.trim())) {
+            finalImeiList.push({ imei: imei.trim(), branchId: selectedManualBranch });
+          }
+        });
+      }
+
+      // Distribute IMEIs among colors
+      const imeiPerColor = Math.floor(finalImeiList.length / colors.length);
+      
+      for (let i = 0; i < colors.length; i++) {
+        const color = colors[i];
+        // Only append color if it's not already in the name
+        const finalName = color && !addForm.name.toLowerCase().includes(color.toLowerCase()) 
+          ? `${addForm.name} ${color}` 
+          : addForm.name;
+        
+        const finalSku = color && !addForm.sku.toLowerCase().includes(color.toLowerCase().replace(/\s+/g, '-'))
+          ? `${addForm.sku}-${color.toUpperCase().replace(/\s+/g, '-')}` 
+          : addForm.sku;
+        
+        // Take a slice of IMEIs for this color
+        const startIdx = i * imeiPerColor;
+        const endIdx = (i === colors.length - 1) ? finalImeiList.length : (i + 1) * imeiPerColor;
+        const currentImeiList = colors.length > 1 ? finalImeiList.slice(startIdx, endIdx) : finalImeiList;
+
+        await addProduct(
+          {
+            name: finalName,
+            sku: finalSku.toUpperCase(),
+            category: addForm.category,
+            purchasePrice: Number(addForm.buyPrice),
+            retailPrice: Number(addForm.sellPrice),
+          },
+          stockData,
+          currentImeiList
+        );
+      }
+
+
+
+
+      alert(`Berhasil menambah ${colors.length} produk varian!`);
       setShowAddForm(false);
-      setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0" });
+      setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0", colors: "" });
       setImeiList([]);
-      // Refresh
       window.location.reload();
     } catch (err) {
       alert("Gagal tambah produk: " + err.message);
     }
   };
 
-  const startEdit = (p) => {
+
+  const [editImeis, setEditImeis] = useState([]);
+  const [isImeiLoading, setIsImeiLoading] = useState(false);
+
+  const startEdit = async (p) => {
     setEditingId(p.id);
     const rutengId = branches.find(b => b.name.toLowerCase().includes("ruteng"))?.id;
     const laraId = branches.find(b => b.name.toLowerCase().includes("larantuka"))?.id;
@@ -219,12 +287,30 @@ export default function InventoryPage() {
       stockB: laraId ? p.stocks[laraId] : 0,
       stockC: riungId ? p.stocks[riungId] : 0
     });
+
+    // Load IMEIs for this product immediately
+    setIsImeiLoading(true);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("imei_records")
+        .select("*")
+        .eq("product_id", p.id)
+        .order("status", { ascending: true });
+      setEditImeis(data || []);
+    } catch (err) {
+      console.error("Error loading edit IMEIs:", err);
+    } finally {
+      setIsImeiLoading(false);
+    }
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditForm(null);
+    setEditImeis([]);
   };
+
 
   const handleSaveEdit = async () => {
     try {
@@ -425,8 +511,11 @@ export default function InventoryPage() {
                 "Harga Beli": p.buyPrice,
                 "Harga Jual": p.sellPrice,
                 "Stok Ruteng": rutengId ? p.stocks[rutengId] : 0,
+                "IMEI Ruteng": rutengId ? p.imeiStrings[rutengId] : "",
                 "Stok Larantuka": laraId ? p.stocks[laraId] : 0,
+                "IMEI Larantuka": laraId ? p.imeiStrings[laraId] : "",
                 "Stok Riung": riungId ? p.stocks[riungId] : 0,
+                "IMEI Riung": riungId ? p.imeiStrings[riungId] : "",
                 "Total Stok": Object.values(p.stocks).reduce((a,b) => a+b, 0)
               };
             }), "Template_Migrasi_Stok")}
@@ -494,9 +583,14 @@ export default function InventoryPage() {
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-white/40 uppercase font-bold">Warna / Varian (Pisahkan dengan koma)</label>
+              <input className="input-field" placeholder="e.g. Merah, Biru, Hitam" value={addForm.colors} onChange={e => setAddForm({...addForm, colors: e.target.value})} />
+            </div>
+            <div className="flex flex-col gap-1.5">
               <label className="text-[10px] text-white/40 uppercase font-bold">Harga Beli (Rp)</label>
               <input type="number" className="input-field" placeholder="0" value={addForm.buyPrice} onChange={e => setAddForm({...addForm, buyPrice: e.target.value})} />
             </div>
+
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] text-white/40 uppercase font-bold">Harga Jual (Rp)</label>
               <input type="number" className="input-field font-bold text-indigo-400" placeholder="0" value={addForm.sellPrice} onChange={e => setAddForm({...addForm, sellPrice: e.target.value})} />
@@ -557,24 +651,33 @@ export default function InventoryPage() {
               </div>
 
               <div className="flex flex-col gap-3">
-                <div className="flex gap-2">
-                  <input 
-                    className="input-field flex-1 text-sm font-mono" 
-                    placeholder="Ketik IMEI manual..." 
+                <div className="flex flex-col gap-2">
+                  <textarea 
+                    className="input-field w-full text-sm font-mono h-24 py-3" 
+                    placeholder="Input banyak IMEI sekaligus (pisahkan dengan baris baru, spasi, atau koma)..." 
                     value={manualImei}
                     onChange={e => setManualImei(e.target.value)}
                   />
-                  <button 
-                    onClick={() => {
-                      if(!manualImei || !selectedManualBranch) return alert("Isi IMEI dan pilih cabang!");
-                      handleAddImei(manualImei, selectedManualBranch);
-                      setManualImei("");
-                    }}
-                    className="px-4 bg-white/5 border border-white/10 text-white rounded-xl text-xs font-bold"
-                  >
-                    Tambah
-                  </button>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-white/30 italic">* Anda bisa copy-paste daftar IMEI dari Excel atau Notepad</span>
+                    <button 
+                      onClick={() => {
+                        if(!manualImei || !selectedManualBranch) return alert("Isi IMEI dan pilih cabang!");
+                        // Split by newline, comma, or space
+                        const imeis = manualImei.split(/[\n, ]+/).filter(i => i.trim() !== "");
+                        if (imeis.length === 0) return;
+                        
+                        imeis.forEach(imei => handleAddImei(imei.trim(), selectedManualBranch));
+                        setManualImei("");
+                        alert(`${imeis.length} IMEI berhasil ditambahkan ke daftar.`);
+                      }}
+                      className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-500/20"
+                    >
+                      Tambah Semua IMEI
+                    </button>
+                  </div>
                 </div>
+
 
                 <div className="flex flex-wrap gap-2">
                   {imeiList.map((item) => (
@@ -771,9 +874,11 @@ export default function InventoryPage() {
                     <td style={{ textAlign: "center" }}>
                       {hasAccess && (
                         <div className="flex items-center justify-center gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-indigo-400" title="Transfer Stok">
-                            <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-                          </button>
+                          {product.category === "HP" && (
+                            <button onClick={() => setManageImeiProduct(product)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-indigo-400" title="Kelola IMEI">
+                              <span className="material-symbols-outlined text-[18px]">barcode_scanner</span>
+                            </button>
+                          )}
                           <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-white" title="Edit">
                             <span className="material-symbols-outlined text-[18px]">edit</span>
                           </button>
@@ -795,9 +900,10 @@ export default function InventoryPage() {
 
       {/* Edit Modal (Fixed Overlay) */}
       {editingId && editForm && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={cancelEdit} />
-          <div className="glass-card w-full max-w-4xl max-h-[90vh] overflow-y-auto relative animate-scale-in p-4 sm:p-6 border-indigo-500/30">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md" onClick={cancelEdit} />
+          <div className="glass-card w-full max-w-4xl max-h-[95vh] overflow-y-auto relative animate-scale-in p-4 sm:p-8 border-indigo-500/30 flex flex-col">
+
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
@@ -862,6 +968,57 @@ export default function InventoryPage() {
                 </div>
               </div>
             </div>
+            
+            {editForm.category === "HP" && (
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]">barcode_scanner</span>
+                    Daftar IMEI Terdaftar
+                  </h4>
+                  <button 
+                    onClick={() => setManageImeiProduct(editForm)}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/20 transition-all flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-sm">open_in_new</span>
+                    Kelola / Tambah IMEI
+                  </button>
+                </div>
+                
+                <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {isImeiLoading ? (
+                    <div className="py-8 text-center text-white/20 text-xs animate-pulse flex flex-col items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                      Memuat data IMEI...
+                    </div>
+                  ) : editImeis.length === 0 ? (
+                    <div className="py-8 text-center text-white/20 text-xs italic bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                      Belum ada IMEI terdaftar untuk produk ini.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2">
+                      {editImeis.map(i => (
+                        <div key={i.imei} className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-mono font-bold text-white/90">{i.imei}</span>
+                            <span className="text-[9px] text-white/30 uppercase tracking-tight">
+                              {branches.find(b => b.id === i.branch_id)?.name.split(' ')[2] || "Lainnya"}
+                            </span>
+                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                            i.status === 'stock' ? 'bg-emerald-500/10 text-emerald-400' : 
+                            i.status === 'sold' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'
+                          }`}>
+                            {i.status.toUpperCase()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
               <button onClick={cancelEdit} className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm font-bold hover:bg-white/10 transition-all">
@@ -1042,9 +1199,263 @@ export default function InventoryPage() {
           onClose={() => setShowScanner(false)}
         />
       )}
+
+      {/* IMEI Management Modal */}
+      {manageImeiProduct && (
+        <IMEIManagementModal 
+          product={manageImeiProduct}
+          branches={branches}
+          onClose={() => setManageImeiProduct(null)}
+          onRefresh={async () => {
+            // Instead of reload, just fetch the new list for the edit modal
+            try {
+              const supabase = createClient();
+              const { data } = await supabase
+                .from("imei_records")
+                .select("*")
+                .eq("product_id", manageImeiProduct.id)
+                .order("status", { ascending: true });
+              setEditImeis(data || []);
+            } catch (err) {
+              console.error("Sync error:", err);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
+
+// ========== IMEI MANAGEMENT MODAL ==========
+function IMEIManagementModal({ product, branches, onClose, onRefresh }) {
+  const [imeis, setImeis] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [newImei, setNewImei] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState(branches[0]?.id || "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const loadImeis = async () => {
+    setIsLoading(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("imei_records")
+        .select("*")
+        .eq("product_id", product.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setImeis(data || []);
+    } catch (err) {
+
+      console.error("Error loading IMEIs:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadImeis();
+  }, [product.id]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newImei.trim()) return;
+
+    // Split by newline, comma, or space for bulk
+    const imeisToAdd = newImei.split(/[\n, ]+/).filter(i => i.trim() !== "");
+    if (imeisToAdd.length === 0) return;
+
+    setIsSaving(true);
+    try {
+      let successCount = 0;
+      let errors = [];
+
+      for (const imei of imeisToAdd) {
+        const res = await addImeiRecord({
+          imei: imei.trim(),
+          product_id: product.id,
+          branch_id: selectedBranch,
+          status: "stock",
+          last_action: "Input Manual via Inventaris"
+        });
+        if (res.success) successCount++;
+        else errors.push(`${imei.trim()}: ${res.error}`);
+      }
+
+      if (successCount > 0) {
+        setNewImei("");
+        await loadImeis();
+        if (onRefresh) onRefresh(); // Sync with parent
+        if (errors.length > 0) {
+          alert(`Berhasil menambah ${successCount} IMEI. Gagal: ${errors.length}.`);
+        }
+      } else {
+        alert("Gagal menambah IMEI: " + errors.join(", "));
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+  const handleUpdateStatus = async (imei, status) => {
+    try {
+      const res = await updateImeiRecord(imei, { status });
+      if (res.success) {
+        await loadImeis();
+        if (onRefresh) onRefresh(); // Sync with parent
+      } else {
+        alert("Gagal update status: " + res.error);
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleDelete = async (imei) => {
+    if (!confirm(`Yakin ingin menghapus IMEI ${imei}? Data akan dihapus permanen dari database.`)) return;
+    
+    try {
+      // Optimistic update
+      setImeis(prev => prev.filter(i => i.imei !== imei));
+      
+      const res = await deleteImeiRecord(imei);
+      if (res.success) {
+        // Just a small notification, no blocking alert if possible
+        console.log("IMEI deleted successfully");
+        if (onRefresh) onRefresh(); // Sync with parent
+      } else {
+        alert("Gagal menghapus dari database: " + res.error);
+        await loadImeis(); // Rollback
+      }
+    } catch (err) {
+      alert("Error saat menghapus: " + err.message);
+      await loadImeis();
+    }
+  };
+
+
+  const filtered = imeis.filter(i => i.imei.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+      <div className="bg-[#0f172a] border border-white/10 rounded-[32px] w-full max-w-2xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col animate-scale-up relative">
+
+        <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+          <div>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-400">barcode_scanner</span>
+              Kelola IMEI
+            </h3>
+            <p className="text-xs text-white/40">{product.name}</p>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex flex-col gap-6 custom-scrollbar">
+          {/* Add New IMEI */}
+          <form onSubmit={handleAdd} className="bg-white/[0.03] border border-white/10 rounded-2xl p-5 flex flex-col gap-4">
+            <h4 className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Input IMEI Baru (Bisa banyak sekaligus)</h4>
+            <div className="flex flex-col gap-3">
+              <textarea 
+                className="input-field w-full font-mono tracking-widest text-sm py-3 px-5 bg-white/5 border-white/10 focus:border-indigo-500/50 text-indigo-400 h-24" 
+                placeholder="Tempelkan banyak IMEI di sini (pisahkan baris/koma)..." 
+                value={newImei} 
+                onChange={e => setNewImei(e.target.value)} 
+                required
+              />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <select className="input-field flex-1" value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)}>
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+                <button disabled={isSaving} type="submit" className="btn-gradient px-10 h-[46px] whitespace-nowrap font-bold">
+                  {isSaving ? "Menyimpan..." : "Tambah ke Stok"}
+                </button>
+              </div>
+              <p className="text-[10px] text-white/20 italic">* Jika tadi Anda input lewat "Tambah Produk" tapi tidak muncul, silakan tempel ulang di sini.</p>
+            </div>
+          </form>
+
+
+
+          {/* List IMEIs */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Daftar IMEI ({imeis.length})</h4>
+              <div className="relative">
+                <input 
+                  className="bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-indigo-500/50 w-48" 
+                  placeholder="Cari..." 
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[14px] text-white/20">search</span>
+              </div>
+            </div>
+
+            <div className="border border-white/5 rounded-2xl overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-white/5 text-white/40 uppercase text-[9px] font-bold">
+                  <tr>
+                    <th className="px-4 py-3">IMEI</th>
+                    <th className="px-4 py-3">Cabang</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {isLoading ? (
+                    <tr><td colSpan="4" className="px-4 py-8 text-center text-white/20 animate-pulse">Memuat data...</td></tr>
+                  ) : filtered.length === 0 ? (
+                    <tr><td colSpan="4" className="px-4 py-8 text-center text-white/20">Tidak ada data IMEI ditemukan.</td></tr>
+                  ) : filtered.map(i => (
+                    <tr key={i.imei} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3 font-mono text-white/80">{i.imei}</td>
+                      <td className="px-4 py-3 text-white/40 whitespace-nowrap">{branches.find(b => b.id === i.branch_id)?.name.split(' ')[2] || "Lainnya"}</td>
+                      <td className="px-4 py-3">
+                        <select 
+                          className={`bg-transparent border-none text-[10px] font-bold uppercase p-0 cursor-pointer focus:ring-0 ${
+                            i.status === 'stock' ? 'text-emerald-400' : i.status === 'sold' ? 'text-blue-400' : 'text-amber-400'
+                          }`}
+                          value={i.status}
+                          onChange={(e) => handleUpdateStatus(i.imei, e.target.value)}
+                        >
+                          <option value="stock" className="bg-[#0f172a] text-emerald-400">STOCK</option>
+                          <option value="sold" className="bg-[#0f172a] text-blue-400">SOLD</option>
+                          <option value="service" className="bg-[#0f172a] text-amber-400">SERVICE</option>
+                          <option value="transfer" className="bg-[#0f172a] text-purple-400">TRANSFER</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => handleDelete(i.imei)} className="p-2 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-6 border-t border-white/5 bg-white/[0.01] flex justify-end">
+          <button onClick={() => { onRefresh(); onClose(); }} className="px-8 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all">
+            Selesai
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 
 // Wrap with isMounted check for dynamic data
 function DynamicValue({ children, isMounted }) {
@@ -1078,3 +1489,56 @@ function StockBadge({ count, label }) {
     </span>
   );
 }
+
+// ========== SIMPLE IMEI LIST FOR EDIT MODAL ==========
+function IMEIListSimple({ productId, branches }) {
+  const [imeis, setImeis] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("imei_records")
+          .select("*")
+          .eq("product_id", productId)
+          .order("status", { ascending: true });
+        
+        if (error) throw error;
+        setImeis(data || []);
+      } catch (err) {
+        console.error("Error simple list:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    if (productId) load();
+  }, [productId]);
+
+  if (isLoading) return <div className="py-4 text-center text-white/20 text-xs animate-pulse flex items-center justify-center gap-2">
+    <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+    Memuat IMEI...
+  </div>;
+
+  if (imeis.length === 0) return <div className="py-4 text-center text-white/20 text-xs italic">Belum ada IMEI terdaftar.</div>;
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {imeis.map(i => (
+        <div key={i.imei} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-mono text-white/80">{i.imei}</span>
+            <span className="text-[8px] text-white/30 uppercase">{branches.find(b => b.id === i.branch_id)?.name.split(' ')[2] || "Lainnya"}</span>
+          </div>
+          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+            i.status === 'stock' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'
+          }`}>
+            {i.status.toUpperCase()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+

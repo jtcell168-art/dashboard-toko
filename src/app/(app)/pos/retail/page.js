@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { formatRupiah } from "@/data/mockData";
 import { getPosProducts, processTransaction } from "@/app/actions/pos";
 import { getCurrentUser } from "@/app/actions/auth";
+import { useBranch } from "@/context/BranchContext";
 import Scanner from "@/components/Scanner";
 import IMEISelector from "@/components/pos/IMEISelector";
 
@@ -18,6 +19,7 @@ const PAYMENT_METHODS = [
 const CREDIT_PROVIDERS = ["Vast Finance", "Kredivo Reguler", "Yess Kredit", "Spektra", "Bank"];
 
 export default function RetailPOSPage() {
+  const { selectedBranch } = useBranch();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -25,6 +27,8 @@ export default function RetailPOSPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+
   const [creditProvider, setCreditProvider] = useState(CREDIT_PROVIDERS[0]);
   const [installmentData, setInstallmentData] = useState({ downPayment: "", tenor: "3", interestRate: "0" });
 
@@ -35,16 +39,34 @@ export default function RetailPOSPage() {
   const [showScanner, setShowScanner] = useState(false);
   const [selectingImeiItem, setSelectingImeiItem] = useState(null); // { productId, cartIdx }
 
+  // Determine active branch: profile branch or selected branch if owner/manager
+  const activeBranch = useMemo(() => {
+    if (!currentUser) return "all";
+    if (currentUser.role === 'owner' || currentUser.role === 'manager') {
+      return selectedBranch === 'all' ? (currentUser.branch_id || 'all') : selectedBranch;
+    }
+    return currentUser.branch_id || "all";
+  }, [currentUser, selectedBranch]);
+
   useEffect(() => {
     async function loadData() {
       const user = await getCurrentUser();
       setCurrentUser(user);
-      const data = await getPosProducts(user?.branch_id || "all");
-      setDbProducts(data);
-      setIsLoading(false);
     }
     loadData();
   }, []);
+
+  useEffect(() => {
+    async function loadProducts() {
+      if (!currentUser) return;
+      setIsLoading(true);
+      const data = await getPosProducts(activeBranch);
+      setDbProducts(data);
+      setIsLoading(false);
+    }
+    loadProducts();
+  }, [currentUser, activeBranch]);
+
 
   // Only sellable products (with sellPrice > 0)
   const products = useMemo(() => {
@@ -124,22 +146,23 @@ export default function RetailPOSPage() {
 
     setIsProcessing(true);
     try {
-      await processTransaction(
-        cart,
-        discountAmount,
-        paymentMethod,
-        customerName,
-        currentUser?.branch_id || "all",
-        currentUser?.id,
+      const trx = await processTransaction(
+        cart, 
+        discountAmount, 
+        paymentMethod, 
+        customerName || "Pelanggan Umum", 
+        activeBranch, 
+        currentUser.id, 
         customerPhone,
         creditProvider,
-        parseFloat(discountPercent) || 0,
-        paymentMethod === "installment" ? installmentData : null
+        parseFloat(discountPercent || 0),
+        installmentData,
+        customerAddress
       );
       setShowReceipt(true);
       
       // Reload products to get fresh stock
-      const freshData = await getPosProducts(currentUser?.branch_id || "all");
+      const freshData = await getPosProducts(activeBranch);
       setDbProducts(freshData);
     } catch (err) {
       alert("Gagal memproses transaksi: " + err.message);
@@ -366,6 +389,13 @@ export default function RetailPOSPage() {
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                 />
+                <input
+                  className="input-field text-xs col-span-2"
+                  placeholder="Alamat (Kecamatan/Desa)"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                />
+
               </div>
 
               {/* Discount */}
@@ -525,7 +555,7 @@ export default function RetailPOSPage() {
       {selectingImeiItem && (
         <IMEISelector 
           productId={selectingImeiItem.productId}
-          branchId={currentUser?.branch_id}
+          branchId={activeBranch}
           selectedImeis={cart[selectingImeiItem.cartIdx]?.selectedImeis || []}
           onSelect={(imei) => selectImei(selectingImeiItem.productId, selectingImeiItem.cartIdx, imei)}
           onClose={() => setSelectingImeiItem(null)}
