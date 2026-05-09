@@ -138,8 +138,9 @@ export default function RetailPOSPage() {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
 
-    // Validation: HP products must have correct number of IMEIs
-    const hpMissingImei = cart.find(item => item.category === "HP" && (item.selectedImeis?.length || 0) < item.qty);
+    // Validation: IMEI-tracked products must have correct number of IMEIs
+    const isImeiCategory = (cat) => cat?.trim().toUpperCase() === "HP";
+    const hpMissingImei = cart.find(item => isImeiCategory(item.category) && (item.selectedImeis?.length || 0) < item.qty);
     if (hpMissingImei) {
       alert(`Produk ${hpMissingImei.name} memerlukan ${hpMissingImei.qty} IMEI. Silakan pilih IMEI terlebih dahulu.`);
       return;
@@ -267,7 +268,7 @@ export default function RetailPOSPage() {
                   style={{ background: "rgba(99,102,241,0.1)" }}
                 >
                   <span className="material-symbols-outlined text-[22px] text-indigo-400">
-                    {product.category === "HP" ? "smartphone" : product.category === "Aksesori" ? "cable" : "memory"}
+                    {product.category === "HP" ? "smartphone" : product.category === "Aksesori" ? "cable" : ["KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(product.category?.toUpperCase()) ? "sim_card" : "memory"}
                   </span>
                 </div>
 
@@ -340,7 +341,7 @@ export default function RetailPOSPage() {
                       </button>
                     </div>
 
-                    {/* IMEI Section for HP */}
+                    {/* IMEI Section for IMEI-tracked items */}
                     {item.category === "HP" && (
                       <div className="pl-1 flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">

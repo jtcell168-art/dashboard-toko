@@ -351,6 +351,7 @@ export default function DashboardPage() {
   const totalServices = (data.kpi.activeServices?.pending || 0) + (data.kpi.activeServices?.process || 0) + (data.kpi.activeServices?.done || 0);
 
   return (
+    <>
     <div className="flex flex-col gap-6 relative z-10">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -583,10 +584,13 @@ export default function DashboardPage() {
         <AttendanceAlerts issues={data.attendanceIssues} />
       </div>
 
+    </div>
+
+    {/* MODALS - Root level to avoid clipping */}
       {/* Message Modal */}
       {showMsgModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-md p-6 animate-scale-in">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="glass-card w-full max-w-md p-6 animate-scale-in z-10">
             <h2 className="text-lg font-bold text-white mb-4">Kirim Pesan Internal</h2>
             <form onSubmit={handleSendMessage} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
@@ -652,7 +656,7 @@ export default function DashboardPage() {
           onClose={() => setShowSlip(false)} 
         />
       )}
-    </div>
+    </>
   );
 }
 

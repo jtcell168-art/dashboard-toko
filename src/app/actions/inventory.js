@@ -65,18 +65,38 @@ export async function getInventory(branchId = "all") {
         categoryName = Array.isArray(p.categories) ? p.categories[0]?.name : p.categories?.name;
       }
       
-      const isHP = categoryName?.trim().toUpperCase() === "HP";
-      let filteredStock = p.stock || [];
+      const isImeiTracked = categoryName?.trim().toUpperCase() === "HP";
+      // Group and sum stock records by branch ID to handle potential duplicates
+      const branchStockMap = {};
+      p.stock?.forEach(s => {
+        if (!branchStockMap[s.branch_id]) {
+          branchStockMap[s.branch_id] = {
+            branch_id: s.branch_id,
+            quantity: 0,
+            branches: s.branches
+          };
+        }
+        branchStockMap[s.branch_id].quantity += Number(s.quantity || 0);
+      });
+      let filteredStock = Object.values(branchStockMap);
       
-      // For HP, we overwrite the quantity from the stock table with actual IMEI counts
-      if (isHP && imeiCountsMap[p.id]) {
+      // For HP products, we overwrite with IMEI counts
+      if (isImeiTracked && imeiCountsMap[p.id]) {
         const branchCounts = imeiCountsMap[p.id];
         
         // Update existing stock records
-        filteredStock = filteredStock.map(s => ({
-          ...s,
-          quantity: branchCounts[s.branch_id] || 0
-        }));
+        filteredStock = filteredStock.map(s => {
+          const imeiCount = branchCounts[s.branch_id] || 0;
+          // Fallback for non-HP (like Kartu Perdana)
+          const finalQty = (imeiCount === 0 || categoryName?.trim().toUpperCase() !== "HP") 
+            ? s.quantity 
+            : imeiCount;
+            
+          return {
+            ...s,
+            quantity: finalQty
+          };
+        });
  
         // Add branches that have IMEIs but no stock record
         Object.entries(branchCounts).forEach(([bId, count]) => {
@@ -125,7 +145,8 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
   try {
     const supabase = await createClient();
     const user = await getCurrentUser();
-    if (!user || (user.role !== "owner" && user.role !== "manager")) {
+    const role = (user?.role || "").toLowerCase();
+    if (!user || (role !== "owner" && role !== "manager")) {
       return { success: false, error: "Unauthorized" };
     }
 
@@ -147,6 +168,8 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
 
     if (existingProduct) {
       productId = existingProduct.id;
+      // Clear old stock if product already exists to ensure fresh start
+      await supabase.from("stock").delete().eq("product_id", productId);
     } else {
       const insertData = {
         name: productData.name,
@@ -178,7 +201,6 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
             product_id: productId, 
             branch_id: branchId, 
             quantity: qty,
-            updated_at: new Date().toISOString()
           }, { 
             onConflict: 'product_id,branch_id' 
           });
@@ -209,7 +231,8 @@ export async function updateProduct(productId, productData, initialStockMap) {
   try {
     const supabase = await createClient();
     const user = await getCurrentUser();
-    if (!user || (user.role !== "owner" && user.role !== "manager")) {
+    const role = (user?.role || "").toLowerCase();
+    if (!user || (role !== "owner" && role !== "manager")) {
       return { success: false, error: "Unauthorized" };
     }
 
@@ -232,26 +255,32 @@ export async function updateProduct(productId, productData, initialStockMap) {
       .eq("id", productId);
 
     if (error) return { success: false, error: error.message };
+    
+    // Delete existing stock records first to prevent duplicates and ensure manual overwrite
+    const { error: delError } = await supabase
+      .from("stock")
+      .delete()
+      .eq("product_id", productId);
+      
+    if (delError) console.error("Gagal membersihkan stok lama:", delError);
 
     // Update or Insert Stok per Cabang
     if (initialStockMap) {
       for (const branchId of Object.keys(initialStockMap)) {
         const qty = Number(initialStockMap[branchId] || 0);
         
-        // Gunakan upsert untuk memastikan data masuk baik barisnya sudah ada atau belum
+        // Gunakan insert karena kita sudah hapus yang lama
         const { error: stockError } = await supabase
           .from("stock")
-          .upsert({ 
+          .insert({ 
             product_id: productId, 
             branch_id: branchId, 
             quantity: qty,
-            updated_at: new Date().toISOString()
-          }, { 
-            onConflict: 'product_id,branch_id' 
           });
 
         if (stockError) {
           console.error(`Gagal update stok cabang ${branchId}:`, stockError);
+          return { success: false, error: `Gagal update stok cabang ${branchId}: ${stockError.message}` };
         }
       }
     }
@@ -266,7 +295,8 @@ export async function updateProduct(productId, productData, initialStockMap) {
 export async function deleteProduct(productId) {
   const supabase = await createClient();
   const user = await getCurrentUser();
-  if (!user || (user.role !== "owner" && user.role !== "manager")) {
+  const role = (user?.role || "").toLowerCase();
+  if (!user || (role !== "owner" && role !== "manager")) {
     throw new Error("Unauthorized. Hanya Owner atau Manager yang bisa menghapus data.");
   }
 
@@ -280,7 +310,8 @@ export async function updateProductPrice(productId, newBuyPrice, newSellPrice, r
   const supabase = await createClient();
   const user = await getCurrentUser();
   
-  if (!user || (user.role !== "owner" && user.role !== "manager")) {
+  const role = (user?.role || "").toLowerCase();
+  if (!user || (role !== "owner" && role !== "manager")) {
     throw new Error("Unauthorized. Hanya Owner atau Manager yang bisa mengubah harga.");
   }
 
@@ -588,6 +619,32 @@ export async function receiveTransfer(transferId) {
           })
           .eq("id", imei.id);
       }
+    } else {
+      // Fallback: If it's an IMEI-tracked category but no IMEIs were explicitly marked, 
+      // move available ones from the source branch to match the quantity.
+      const categoryName = product?.categories?.name?.trim().toUpperCase();
+      if (["HP", "KARTU PERDANA", "PERDANA"].includes(categoryName)) {
+        const { data: availableImeis } = await supabase
+          .from("imei_records")
+          .select("id")
+          .eq("product_id", transfer.product_id)
+          .eq("branch_id", transfer.from_branch_id)
+          .eq("status", "stock")
+          .limit(transfer.quantity);
+          
+        if (availableImeis && availableImeis.length > 0) {
+          for (const imei of availableImeis) {
+            await supabase
+              .from("imei_records")
+              .update({
+                status: "stock",
+                branch_id: transfer.to_branch_id,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", imei.id);
+          }
+        }
+      }
     }
 
     // 4. Update status transfer
@@ -620,7 +677,8 @@ async function syncStockWithImeis(supabase, productId, branchId) {
       .eq("id", productId)
       .single();
 
-    if (product?.categories?.name?.trim().toUpperCase() === "HP") {
+    const categoryName = product?.categories?.name?.trim().toUpperCase();
+    if (["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(categoryName)) {
       const { count } = await supabase
         .from("imei_records")
         .select("*", { count: 'exact', head: true })

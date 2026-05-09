@@ -74,7 +74,8 @@ export default function TransferStokPage() {
     setSearchQuery("");
     setSelectedImeis([]);
     
-    if (product.category === 'HP') {
+    const isImeiTracked = ["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(product.category?.toUpperCase());
+    if (isImeiTracked) {
       setQty(0);
       setShowImeiSelector(true);
     } else {
@@ -93,12 +94,13 @@ export default function TransferStokPage() {
   const handleSubmit = async () => { 
     if (!selectedProduct || !fromBranch || !toBranch) return;
     
-    if (selectedProduct.category === 'HP' && selectedImeis.length === 0) {
-      alert("Pilih IMEI terlebih dahulu untuk produk HP.");
+    const isImeiTracked = ["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(selectedProduct.category?.toUpperCase());
+    if (isImeiTracked && selectedImeis.length === 0) {
+      alert("Pilih IMEI terlebih dahulu untuk produk ini.");
       return;
     }
     
-    const finalQty = selectedProduct.category === 'HP' ? selectedImeis.length : Number(qty);
+    const finalQty = isImeiTracked ? selectedImeis.length : Number(qty);
     if (finalQty <= 0) {
       alert("Jumlah transfer minimal 1.");
       return;
@@ -218,7 +220,7 @@ export default function TransferStokPage() {
 
             <div className="flex flex-col gap-1.5 z-40">
               <label className="text-xs text-white/40">Jumlah</label>
-              {selectedProduct?.category === 'HP' ? (
+              {["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(selectedProduct?.category?.toUpperCase()) ? (
                 <div className="flex items-center gap-2">
                   <input className="input-field flex-1 opacity-60" readOnly value={selectedImeis.length} />
                   <button onClick={() => setShowImeiSelector(true)} className="btn-gradient px-3 py-2 text-xs rounded-xl flex items-center gap-1">
@@ -239,7 +241,7 @@ export default function TransferStokPage() {
             </div>
             
             {/* Selected IMEIs List */}
-            {selectedProduct?.category === 'HP' && selectedImeis.length > 0 && (
+            {["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(selectedProduct?.category?.toUpperCase()) && selectedImeis.length > 0 && (
               <div className="col-span-1 sm:col-span-2 flex flex-wrap gap-2 mt-1">
                 {selectedImeis.map(imei => (
                   <div key={imei.id} className="flex items-center gap-1.5 bg-indigo-500/20 text-indigo-300 text-xs px-2.5 py-1.5 rounded-lg border border-indigo-500/30">

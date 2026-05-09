@@ -25,7 +25,7 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("Semua");
   const [sortBy, setSortBy] = useState("name");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0", colors: "" });
+  const [addForm, setAddForm] = useState({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stocks: {}, colors: "" });
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -207,13 +207,7 @@ export default function InventoryPage() {
   const handleAddProduct = async () => {
     try {
       const colors = addForm.colors ? addForm.colors.split(/[,]+/).map(c => c.trim()).filter(c => c !== "") : [""];
-      const stockData = {};
-      branches.forEach(b => {
-        if (b.name.toLowerCase().includes("ruteng")) stockData[b.id] = Number(addForm.stockA);
-        else if (b.name.toLowerCase().includes("larantuka")) stockData[b.id] = Number(addForm.stockB);
-        else if (b.name.toLowerCase().includes("riung")) stockData[b.id] = Number(addForm.stockC);
-        else stockData[b.id] = 0;
-      });
+      const stockData = addForm.stocks;
 
       // Automatically include IMEIs from the textarea if user forgot to click "Tambah"
       let finalImeiList = [...imeiList];
@@ -245,7 +239,7 @@ export default function InventoryPage() {
         const endIdx = (i === colors.length - 1) ? finalImeiList.length : (i + 1) * imeiPerColor;
         const currentImeiList = colors.length > 1 ? finalImeiList.slice(startIdx, endIdx) : finalImeiList;
 
-        await addProduct(
+        const result = await addProduct(
           {
             name: finalName,
             sku: finalSku.toUpperCase(),
@@ -256,18 +250,20 @@ export default function InventoryPage() {
           stockData,
           currentImeiList
         );
+
+        if (!result.success) {
+          alert("Gagal tambah produk: " + result.error);
+          return;
+        }
       }
-
-
-
 
       alert(`Berhasil menambah ${colors.length} produk varian!`);
       setShowAddForm(false);
-      setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stockA: "0", stockB: "0", stockC: "0", colors: "" });
+      setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stocks: {}, colors: "" });
       setImeiList([]);
       window.location.reload();
     } catch (err) {
-      alert("Gagal tambah produk: " + err.message);
+      alert("Error sistem: " + err.message);
     }
   };
 
@@ -277,15 +273,9 @@ export default function InventoryPage() {
 
   const startEdit = async (p) => {
     setEditingId(p.id);
-    const rutengId = branches.find(b => b.name.toLowerCase().includes("ruteng"))?.id;
-    const laraId = branches.find(b => b.name.toLowerCase().includes("larantuka"))?.id;
-    const riungId = branches.find(b => b.name.toLowerCase().includes("riung"))?.id;
-
     setEditForm({
       ...p,
-      stockA: rutengId ? p.stocks[rutengId] : 0,
-      stockB: laraId ? p.stocks[laraId] : 0,
-      stockC: riungId ? p.stocks[riungId] : 0
+      stocks: p.stocks // This is already the object { branchId: quantity }
     });
 
     // Load IMEIs for this product immediately
@@ -314,14 +304,9 @@ export default function InventoryPage() {
 
   const handleSaveEdit = async () => {
     try {
-      const stockData = {};
-      branches.forEach(b => {
-        if (b.name.toLowerCase().includes("ruteng")) stockData[b.id] = Number(editForm.stockA);
-        else if (b.name.toLowerCase().includes("larantuka")) stockData[b.id] = Number(editForm.stockB);
-        else if (b.name.toLowerCase().includes("riung")) stockData[b.id] = Number(editForm.stockC);
-      });
+      const stockData = editForm.stocks;
 
-      await updateProduct(editingId, 
+      const result = await updateProduct(editingId, 
         {
           name: editForm.name,
           sku: editForm.sku,
@@ -331,12 +316,16 @@ export default function InventoryPage() {
         },
         stockData
       );
-      alert("Produk berhasil diupdate!");
-      setEditingId(null);
-      // Refresh
-      window.location.reload();
+
+      if (result.success) {
+        alert("Produk berhasil diupdate!");
+        setEditingId(null);
+        window.location.reload();
+      } else {
+        alert("Gagal update produk: " + result.error);
+      }
     } catch (err) {
-      alert("Gagal update produk: " + err.message);
+      alert("Error sistem: " + err.message);
     }
   };
 
@@ -454,6 +443,7 @@ export default function InventoryPage() {
   if (!isMounted || !branchIsMounted) return null;
 
   return (
+    <>
     <div className="flex flex-col gap-6 stagger-children">
       {/* Processing Overlay */}
       {isCapturing && (
@@ -597,25 +587,26 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* Initial Stock */}
           <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
             <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px]">inventory_2</span>
               Stok Awal per Cabang
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/30 uppercase">Ruteng (Pusat)</label>
-                <input type="number" className="input-field text-center" value={addForm.stockA} onChange={e => setAddForm({...addForm, stockA: e.target.value})} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/30 uppercase">Larantuka</label>
-                <input type="number" className="input-field text-center" value={addForm.stockB} onChange={e => setAddForm({...addForm, stockB: e.target.value})} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/30 uppercase">Riung</label>
-                <input type="number" className="input-field text-center" value={addForm.stockC} onChange={e => setAddForm({...addForm, stockC: e.target.value})} />
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {branches.map(b => (
+                <div key={b.id} className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-white/30 uppercase">{b.name}</label>
+                  <input 
+                    type="number" 
+                    className="input-field text-center" 
+                    value={addForm.stocks[b.id] || 0} 
+                    onChange={e => setAddForm({
+                      ...addForm, 
+                      stocks: { ...addForm.stocks, [b.id]: Number(e.target.value) }
+                    })} 
+                  />
+                </div>
+              ))}
             </div>
           </div>
 
@@ -874,7 +865,7 @@ export default function InventoryPage() {
                     <td style={{ textAlign: "center" }}>
                       {hasAccess && (
                         <div className="flex items-center justify-center gap-1">
-                          {product.category === "HP" && (
+                          {["HP", "Kartu Perdana"].includes(product.category) && (
                             <button onClick={() => setManageImeiProduct(product)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40 hover:text-indigo-400" title="Kelola IMEI">
                               <span className="material-symbols-outlined text-[18px]">barcode_scanner</span>
                             </button>
@@ -898,152 +889,7 @@ export default function InventoryPage() {
           </table>
         </div>
 
-      {/* Edit Modal (Fixed Overlay) */}
-      {editingId && editForm && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-md" onClick={cancelEdit} />
-          <div className="glass-card w-full max-w-4xl max-h-[95vh] overflow-y-auto relative animate-scale-in p-4 sm:p-8 border-indigo-500/30 flex flex-col">
 
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-indigo-400">edit_square</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Edit Produk</h3>
-                  <p className="text-xs text-white/40">{editForm.name} — {editForm.sku}</p>
-                </div>
-              </div>
-              <button onClick={cancelEdit} className="p-2 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-colors">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Nama Produk</label>
-                <input className="input-field" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">SKU / Kode</label>
-                <input className="input-field font-mono uppercase" value={editForm.sku} onChange={e => setEditForm({...editForm, sku: e.target.value.toUpperCase()})} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Kategori</label>
-                <select className="input-field" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}>
-                  <option value="HP">HP</option>
-                  <option value="Aksesori">Aksesori</option>
-                  <option value="Sparepart">Sparepart</option>
-                </select>
-              </div>
-              {canSeeBuyPrice && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Harga Beli</label>
-                  <input className="input-field tabular-nums" type="number" value={editForm.buyPrice} onChange={e => setEditForm({...editForm, buyPrice: e.target.value})} />
-                </div>
-              )}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Harga Jual</label>
-                <input className="input-field tabular-nums font-bold text-indigo-400" type="number" value={editForm.sellPrice} onChange={e => setEditForm({...editForm, sellPrice: e.target.value})} />
-              </div>
-            </div>
-
-            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[18px]">inventory_2</span>
-                  Update Stok per Cabang
-                </h4>
-                {editForm.category === "HP" ? (
-                  <span className="text-[9px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 animate-pulse">
-                    Otomatis dari Jumlah IMEI
-                  </span>
-                ) : (
-                  <span className="text-[9px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
-                    Input Manual
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white/30 uppercase">Ruteng</label>
-                  <input type="number" className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} readOnly={editForm.category === "HP"} min="0" value={editForm.stockA} onChange={e => setEditForm({...editForm, stockA: e.target.value})} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white/30 uppercase">Larantuka</label>
-                  <input type="number" className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} readOnly={editForm.category === "HP"} min="0" value={editForm.stockB} onChange={e => setEditForm({...editForm, stockB: e.target.value})} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white/30 uppercase">Riung</label>
-                  <input type="number" className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} readOnly={editForm.category === "HP"} min="0" value={editForm.stockC} onChange={e => setEditForm({...editForm, stockC: e.target.value})} />
-                </div>
-              </div>
-            </div>
-            
-            {editForm.category === "HP" && (
-              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px]">barcode_scanner</span>
-                    Daftar IMEI Terdaftar
-                  </h4>
-                  <button 
-                    onClick={() => setManageImeiProduct(editForm)}
-                    className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/20 transition-all flex items-center gap-1.5"
-                  >
-                    <span className="material-symbols-outlined text-sm">open_in_new</span>
-                    Kelola / Tambah IMEI
-                  </button>
-                </div>
-                
-                <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {isImeiLoading ? (
-                    <div className="py-8 text-center text-white/20 text-xs animate-pulse flex flex-col items-center gap-2">
-                      <div className="w-5 h-5 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-                      Memuat data IMEI...
-                    </div>
-                  ) : editImeis.length === 0 ? (
-                    <div className="py-8 text-center text-white/20 text-xs italic bg-white/[0.01] rounded-xl border border-dashed border-white/5">
-                      Belum ada IMEI terdaftar untuk produk ini.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2">
-                      {editImeis.map(i => (
-                        <div key={i.imei} className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
-                          <div className="flex flex-col">
-                            <span className="text-[10px] font-mono font-bold text-white/90">{i.imei}</span>
-                            <span className="text-[9px] text-white/30 uppercase tracking-tight">
-                              {branches.find(b => b.id === i.branch_id)?.name.split(' ')[2] || "Lainnya"}
-                            </span>
-                          </div>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                            i.status === 'stock' ? 'bg-emerald-500/10 text-emerald-400' : 
-                            i.status === 'sold' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'
-                          }`}>
-                            {i.status.toUpperCase()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
-              <button onClick={cancelEdit} className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm font-bold hover:bg-white/10 transition-all">
-                Batal
-              </button>
-              <button onClick={handleSaveEdit} className="btn-gradient px-8 py-2.5 text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20">
-                <span className="material-symbols-outlined text-[18px]">save</span>
-                Simpan Perubahan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
         <div className="md:hidden flex flex-col gap-3 p-4">
           {filtered.length === 0 ? (
@@ -1125,12 +971,166 @@ export default function InventoryPage() {
         </div>
       </div>
       </div>
+      </div>
+
+      {/* MODALS - Moved to root level to avoid clipping and animation issues */}
+      {/* Edit Modal (Fixed Overlay) */}
+      {editingId && editForm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="fixed inset-0" onClick={cancelEdit} />
+          <div className="glass-card w-full max-w-4xl max-h-[95vh] overflow-y-auto relative animate-scale-in p-4 sm:p-8 border-indigo-500/30 flex flex-col z-10">
+
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-indigo-400">edit_square</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Edit Produk</h3>
+                  <p className="text-xs text-white/40">{editForm.name} — {editForm.sku}</p>
+                </div>
+              </div>
+              <button onClick={cancelEdit} className="p-2 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Nama Produk</label>
+                <input className="input-field" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">SKU / Kode</label>
+                <input className="input-field font-mono uppercase" value={editForm.sku} onChange={e => setEditForm({...editForm, sku: e.target.value.toUpperCase()})} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Kategori</label>
+                <select className="input-field" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}>
+                  <option value="HP">HP</option>
+                  <option value="Aksesori">Aksesori</option>
+                  <option value="Sparepart">Sparepart</option>
+                  <option value="Kartu Perdana">Kartu Perdana</option>
+                </select>
+              </div>
+              {canSeeBuyPrice && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Harga Beli</label>
+                  <input className="input-field tabular-nums" type="number" value={editForm.buyPrice} onChange={e => setEditForm({...editForm, buyPrice: e.target.value})} />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Harga Jual</label>
+                <input className="input-field tabular-nums font-bold text-indigo-400" type="number" value={editForm.sellPrice} onChange={e => setEditForm({...editForm, sellPrice: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+                  Update Stok per Cabang
+                </h4>
+                {editForm.category === "HP" ? (
+                  <span className="text-[9px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 animate-pulse">
+                    Otomatis dari Jumlah IMEI
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
+                    Input Manual
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {branches.map(b => (
+                  <div key={b.id} className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-white/30 uppercase">{b.name}</label>
+                    <input 
+                      type="number" 
+                      className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} 
+                      readOnly={editForm.category === "HP"} 
+                      min="0" 
+                      value={editForm.stocks[b.id] || 0} 
+                      onChange={e => setEditForm({
+                        ...editForm, 
+                        stocks: { ...editForm.stocks, [b.id]: Number(e.target.value) }
+                      })} 
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {["HP", "Kartu Perdana"].includes(editForm.category) && (
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]">barcode_scanner</span>
+                    Daftar IMEI Terdaftar
+                  </h4>
+                  <button 
+                    onClick={() => setManageImeiProduct(editForm)}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/20 transition-all flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-sm">open_in_new</span>
+                    Kelola / Tambah IMEI
+                  </button>
+                </div>
+                
+                <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {isImeiLoading ? (
+                    <div className="py-8 text-center text-white/20 text-xs animate-pulse flex flex-col items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                      Memuat data IMEI...
+                    </div>
+                  ) : editImeis.length === 0 ? (
+                    <div className="py-8 text-center text-white/20 text-xs italic bg-white/[0.01] rounded-xl border border-dashed border-white/5">
+                      Belum ada IMEI terdaftar untuk produk ini.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2">
+                      {editImeis.map(i => (
+                        <div key={i.imei} className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-mono font-bold text-white/90">{i.imei}</span>
+                            <span className="text-[9px] text-white/30 uppercase tracking-tight">
+                              {branches.find(b => b.id === i.branch_id)?.name.split(' ')[2] || "Lainnya"}
+                            </span>
+                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                            i.status === 'stock' ? 'bg-emerald-500/10 text-emerald-400' : 
+                            i.status === 'sold' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'
+                          }`}>
+                            {i.status.toUpperCase()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+              <button onClick={cancelEdit} className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm font-bold hover:bg-white/10 transition-all">
+                Batal
+              </button>
+              <button onClick={handleSaveEdit} className="btn-gradient px-8 py-2.5 text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20">
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                Simpan Perubahan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Price History Modal */}
       {showPriceModal && priceHistoryProduct && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowPriceModal(false)} />
-          <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative animate-scale-in">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="fixed inset-0" onClick={() => setShowPriceModal(false)} />
+          <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative animate-scale-in z-10">
             <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
               <div>
                 <h3 className="text-base font-bold text-white">{priceHistoryProduct.name}</h3>
@@ -1234,7 +1234,7 @@ export default function InventoryPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 

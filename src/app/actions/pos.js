@@ -55,11 +55,19 @@ export async function getPosProducts(branchId = "all") {
         categoryName = Array.isArray(product.categories) ? product.categories[0]?.name : product.categories?.name;
       }
       
-      const isHP = categoryName?.trim().toUpperCase() === "HP";
+      const isImeiTracked = categoryName?.trim().toUpperCase() === "HP";
       let filteredStock = product.stock || [];
       let productImeis = [];
+ 
+      // Group and sum stock records by branch ID to handle potential duplicates
+      const branchStockObj = {};
+      filteredStock.forEach(s => {
+        if (!branchStockObj[s.branch_id]) branchStockObj[s.branch_id] = { ...s, quantity: 0 };
+        branchStockObj[s.branch_id].quantity += Number(s.quantity || 0);
+      });
+      filteredStock = Object.values(branchStockObj);
 
-      if (isHP && imeiList) {
+      if (isImeiTracked && imeiList) {
         const productRelatedImeis = imeiList.filter(i => i.product_id === product.id);
         
         // If branchId is specified, we should probably only show IMEIs for that branch to avoid confusion
@@ -77,11 +85,20 @@ export async function getPosProducts(branchId = "all") {
           branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
         });
 
-        // Map back to stock structure
-        filteredStock = filteredStock.map(s => ({
-          ...s,
-          quantity: branchCounts[s.branch_id] || 0
-        }));
+        // Map back to stock structure with IMEI counts
+        filteredStock = filteredStock.map(s => {
+          const imeiCount = branchCounts[s.branch_id] || 0;
+          // Fallback: If it's Kartu Perdana and imeiCount is 0 but stock table has quantity, 
+          // use the stock table quantity (to avoid showing 0 if individual records weren't moved)
+          const finalQty = (imeiCount === 0 || categoryName?.trim().toUpperCase() !== "HP") 
+            ? s.quantity 
+            : imeiCount;
+            
+          return {
+            ...s,
+            quantity: finalQty
+          };
+        });
 
         Object.entries(branchCounts).forEach(([bId, count]) => {
           if (!filteredStock.find(s => s.branch_id === bId)) {
@@ -203,8 +220,9 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
       subtotal: item.sellPrice * item.qty
     }).select().single();
 
-    if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
-      if (item.category === "HP") {
+      const isImeiTracked = ["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(item.category?.trim().toUpperCase());
+      if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
+        if (isImeiTracked) {
         let imeisToSold = [];
         if (item.selectedImeis && item.selectedImeis.length > 0) {
           imeisToSold = item.selectedImeis;
