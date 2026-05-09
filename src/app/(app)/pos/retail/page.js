@@ -42,7 +42,8 @@ export default function RetailPOSPage() {
   // Determine active branch: profile branch or selected branch if owner/manager
   const activeBranch = useMemo(() => {
     if (!currentUser) return "all";
-    if (currentUser.role === 'owner' || currentUser.role === 'manager') {
+    const role = (currentUser.role || "").toLowerCase();
+    if (role.includes('owner') || role.includes('manager')) {
       return selectedBranch === 'all' ? (currentUser.branch_id || 'all') : selectedBranch;
     }
     return currentUser.branch_id || "all";
@@ -81,7 +82,7 @@ export default function RetailPOSPage() {
       );
     }
     return items;
-  }, [search]);
+  }, [search, dbProducts]);
 
   const addToCart = (product) => {
     setCart((prev) => {

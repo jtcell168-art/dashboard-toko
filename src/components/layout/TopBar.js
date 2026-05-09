@@ -73,14 +73,21 @@ export default function TopBar({ sidebarWidth = 256, onMobileMenuToggle, user })
 
       {/* Brand */}
       <div className="flex-1 flex justify-center">
-        <Link href="/dashboard" className="text-xl font-bold tracking-tight"
-          style={{
-            background: "linear-gradient(135deg, #6366F1, #8B5CF6)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          JT CELL GROUP
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <img 
+            src="/logo-jtcell.png" 
+            alt="JT" 
+            className="w-7 h-7 object-contain filter invert" 
+          />
+          <span className="text-lg font-bold tracking-tight"
+            style={{
+              background: "linear-gradient(135deg, #6366F1, #8B5CF6)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            JT CELL
+          </span>
         </Link>
       </div>
 

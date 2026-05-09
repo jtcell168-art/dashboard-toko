@@ -20,6 +20,9 @@ export async function getPosProducts(branchId = "all") {
   try {
     const supabase = await createClient();
     const user = await getCurrentUser();
+    const userRole = (user?.role || "").toLowerCase();
+    const isOwner = userRole.includes("owner");
+    const isManager = userRole.includes("manager");
 
     // 1. Fetch products with stock and categories
     const { data: products, error } = await supabase
@@ -43,18 +46,30 @@ export async function getPosProducts(branchId = "all") {
     const { data: imeiList } = await supabase
       .from("imei_records")
       .select("product_id, branch_id, imei")
-      .eq("status", "stock");
+      .eq("status", "stock")
+      .limit(20000); // Added limit for safety
 
     return products.map(product => {
-      const isHP = product.categories?.name === "HP";
+      let categoryName = "Uncategorized";
+      if (product.categories) {
+        categoryName = Array.isArray(product.categories) ? product.categories[0]?.name : product.categories?.name;
+      }
+      
+      const isHP = categoryName?.trim().toUpperCase() === "HP";
       let filteredStock = product.stock || [];
       let productImeis = [];
 
       if (isHP && imeiList) {
         const productRelatedImeis = imeiList.filter(i => i.product_id === product.id);
         
-        productImeis = productRelatedImeis.map(i => i.imei);
-
+        // If branchId is specified, we should probably only show IMEIs for that branch to avoid confusion
+        // But for searching purposes, we might want all of them if the user is a manager
+        let searchImeis = productRelatedImeis;
+        if (branchId !== "all" && !isOwner && !isManager) {
+           searchImeis = productRelatedImeis.filter(i => i.branch_id === branchId);
+        }
+        
+        productImeis = searchImeis.map(i => i.imei);
 
         // Calculate stock based on available IMEIs
         const branchCounts = {};
@@ -62,7 +77,6 @@ export async function getPosProducts(branchId = "all") {
           branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
         });
 
-        
         // Map back to stock structure
         filteredStock = filteredStock.map(s => ({
           ...s,
@@ -76,10 +90,8 @@ export async function getPosProducts(branchId = "all") {
         });
       }
 
-      // Filter stock row by branch for non-owner/manager
-      if (branchId !== "all" && user?.role !== "owner" && user?.role !== "manager") {
-        filteredStock = filteredStock.filter(s => s.branch_id === branchId);
-      } else if (branchId !== "all") {
+      // Filter stock row by branch
+      if (branchId !== "all") {
         filteredStock = filteredStock.filter(s => s.branch_id === branchId);
       }
 
@@ -89,13 +101,13 @@ export async function getPosProducts(branchId = "all") {
         id: product.id,
         name: product.name,
         sku: product.sku,
-        category: product.categories?.name || "Uncategorized",
+        category: categoryName,
         sellPrice: product.retail_price,
         purchasePrice: product.purchase_price,
         totalStock: totalQty,
         is_service: product.is_service,
         is_digital: product.is_digital,
-        imeis: productImeis, // New field for searching
+        imeis: productImeis, 
       };
     });
   } catch (err) {

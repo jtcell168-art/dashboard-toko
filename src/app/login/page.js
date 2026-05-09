@@ -66,10 +66,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center text-2xl font-black text-white" style={{ background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }}>
-            JT
-          </div>
-          <h1 className="text-2xl font-bold text-white">JT CELL GROUP</h1>
+          <img 
+            src="/logo-jtcell.png" 
+            alt="JT CELL Logo" 
+            className="w-20 h-20 mx-auto mb-2 object-contain filter invert" 
+          />
+          <h1 className="text-2xl font-bold text-white tracking-tight">JT CELL GROUP</h1>
           <p className="text-sm text-white/40 mt-1">Smart System untuk Penjualan & Servis</p>
         </div>
 

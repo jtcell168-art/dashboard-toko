@@ -181,13 +181,12 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
     >
       {/* Logo */}
       <div className="flex items-center h-16 px-4 shrink-0 border-b border-white/[0.04]">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div
-            className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }}
-          >
-            <span className="text-white font-bold text-sm">JT</span>
-          </div>
+        <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden group">
+          <img 
+            src="/logo-jtcell.png" 
+            alt="JT CELL" 
+            className="w-9 h-9 shrink-0 object-contain filter invert group-hover:scale-110 transition-transform" 
+          />
           {!collapsed && (
             <span
               className="text-base font-bold tracking-tight whitespace-nowrap"
@@ -200,7 +199,7 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
               JT CELL GROUP
             </span>
           )}
-        </div>
+        </Link>
       </div>
 
       {/* Menu */}
