@@ -26,6 +26,7 @@ const CATEGORIES = [
   "Sumbangan / Duka",
   "Kirim Meja Demo",
   "Transfer Laba", 
+  "Biaya Admin Transfer Bank",
   "Lainnya"
 ];
 
@@ -193,7 +194,11 @@ export default function ExpensesPage() {
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-white/40">Kategori *</label>
               <select className="input-field" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
-                <option value="">Pilih</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="">Pilih</option>
+                {CATEGORIES
+                  .filter(c => c !== "Biaya Admin Transfer Bank" || hasAccess)
+                  .map(c => <option key={c} value={c}>{c}</option>)
+                }
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -241,7 +246,11 @@ export default function ExpensesPage() {
                     <div className="flex items-center justify-between"><span className="text-sm font-semibold text-white">Edit Pengeluaran</span></div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <select className="input-field" value={editForm.category} onChange={evt => setEditForm({...editForm, category: evt.target.value})}>
-                        <option value="">Pilih</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        <option value="">Pilih</option>
+                        {CATEGORIES
+                          .filter(c => c !== "Biaya Admin Transfer Bank" || hasAccess)
+                          .map(c => <option key={c} value={c}>{c}</option>)
+                        }
                       </select>
                       <input className="input-field tabular-nums" type="number" value={editForm.amount} onChange={evt => setEditForm({...editForm, amount: evt.target.value})} placeholder="Jumlah" />
                       <input className="input-field" value={editForm.note} onChange={evt => setEditForm({...editForm, note: evt.target.value})} placeholder="Catatan" />
