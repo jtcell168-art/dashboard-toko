@@ -1186,11 +1186,12 @@ export default function InventoryPage() {
                         <tr><td colSpan="4" className="px-4 py-8 text-center text-white/20">Belum ada riwayat perubahan.</td></tr>
                       ) : (
                         priceHistory.map((h, i) => (
-                          <tr key={i} className="hover:bg-white/[0.02]">
+                          <tr key={h.id || i} className="hover:bg-white/[0.02] border-b border-white/[0.04] transition-colors">
                             <td className="px-4 py-3 text-white/40">{new Date(h.created_at).toLocaleDateString("id-ID")}</td>
-                            <td className="px-4 py-3 text-right tabular-nums">{formatRupiah(h.old_purchase_price)} → {formatRupiah(h.new_purchase_price)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-semibold text-white">{formatRupiah(h.new_retail_price)}</td>
-                            <td className="px-4 py-3 text-white/60 italic">{h.reason}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-white/80">{formatRupiah(h.old_buy_price)} → {formatRupiah(h.new_buy_price)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-semibold text-indigo-400">{formatRupiah(h.old_sell_price)} → {formatRupiah(h.new_sell_price)}</td>
+                            <td className="px-4 py-3 text-white/60 italic">{h.reason || "-"}</td>
+                            <td className="px-4 py-3 text-white/40 text-[10px]">{h.profiles?.full_name || "System"}</td>
                           </tr>
                         ))
                       )}
@@ -1430,6 +1431,7 @@ function IMEIManagementModal({ product, branches, onClose, onRefresh }) {
                     <tr><td colSpan="4" className="px-4 py-8 text-center text-white/20">Tidak ada data IMEI ditemukan.</td></tr>
                   ) : filtered.map(i => (
                     <tr key={i.imei} className="hover:bg-white/[0.02] transition-colors">
+
                       <td className="px-4 py-3 font-mono text-white/80">{i.imei}</td>
                       <td className="px-4 py-3 text-white/40 whitespace-nowrap">{branches.find(b => b.id === i.branch_id)?.name.split(' ')[2] || "Lainnya"}</td>
                       <td className="px-4 py-3">

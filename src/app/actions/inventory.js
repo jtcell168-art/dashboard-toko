@@ -340,10 +340,10 @@ export async function updateProductPrice(productId, newBuyPrice, newSellPrice, r
     .insert({
       product_id: productId,
       user_id: user.id,
-      old_purchase_price: product.purchase_price,
-      new_purchase_price: newBuyPrice,
-      old_retail_price: product.retail_price,
-      new_retail_price: newSellPrice,
+      old_buy_price: product.purchase_price,
+      new_buy_price: newBuyPrice,
+      old_sell_price: product.retail_price,
+      new_sell_price: newSellPrice,
       reason: reason
     });
 
