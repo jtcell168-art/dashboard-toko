@@ -1,5 +1,6 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
+import { syncStockWithImeis } from "./inventory";
 
 // Helper to get current user info
 async function getCurrentUser() {
@@ -85,14 +86,10 @@ export async function getPosProducts(branchId = "all") {
           branchCounts[i.branch_id] = (branchCounts[i.branch_id] || 0) + 1;
         });
 
-        // Map back to stock structure with IMEI counts
         filteredStock = filteredStock.map(s => {
           const imeiCount = branchCounts[s.branch_id] || 0;
-          // Fallback: If it's Kartu Perdana and imeiCount is 0 but stock table has quantity, 
-          // use the stock table quantity (to avoid showing 0 if individual records weren't moved)
-          const finalQty = (imeiCount === 0 || categoryName?.trim().toUpperCase() !== "HP") 
-            ? s.quantity 
-            : imeiCount;
+          // Source of truth: IMEIs if they exist, otherwise manual stock
+          const finalQty = imeiCount > 0 ? imeiCount : Number(s.quantity || 0);
             
           return {
             ...s,
@@ -220,7 +217,8 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
       subtotal: item.sellPrice * item.qty
     }).select().single();
 
-      const isImeiTracked = ["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(item.category?.trim().toUpperCase());
+      const trackedCategories = ["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"];
+      const isImeiTracked = trackedCategories.includes(item.category?.trim().toUpperCase());
       if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
         if (isImeiTracked) {
         let imeisToSold = [];
@@ -255,18 +253,34 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
         }
       }
 
-      const { data: stockRow } = await supabase
-        .from("stock")
-        .select("*")
-        .eq("product_id", item.id)
-        .eq("branch_id", branchId)
-        .maybeSingle();
-        
-      if (stockRow) {
-        await supabase
+      // 2. Reduce stock quantity in 'stock' table
+      if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
+        // Use upsert to handle cases where stock record might not exist yet
+        const { data: currentStock } = await supabase
           .from("stock")
-          .update({ quantity: Math.max(0, (stockRow.quantity || 0) - item.qty) })
-          .eq("id", stockRow.id);
+          .select("quantity")
+          .eq("product_id", item.id)
+          .eq("branch_id", branchId)
+          .maybeSingle();
+
+        const oldQty = currentStock?.quantity || 0;
+        const newQty = Math.max(0, oldQty - item.qty);
+
+        const { error: stockError } = await supabase
+          .from("stock")
+          .upsert({
+            product_id: item.id,
+            branch_id: branchId,
+            quantity: newQty,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'product_id,branch_id' });
+
+        if (stockError) console.error(`Error updating stock for ${item.name}:`, stockError);
+
+        // 3. For IMEI tracked categories, sync again to be absolutely sure
+        if (isImeiTracked) {
+          await syncStockWithImeis(supabase, item.id, branchId);
+        }
       }
     }
   }

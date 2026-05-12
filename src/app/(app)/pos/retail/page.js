@@ -139,8 +139,10 @@ export default function RetailPOSPage() {
     if (cart.length === 0) return;
 
     // Validation: IMEI-tracked products must have correct number of IMEIs
-    const isImeiCategory = (cat) => cat?.trim().toUpperCase() === "HP";
-    const hpMissingImei = cart.find(item => isImeiCategory(item.category) && (item.selectedImeis?.length || 0) < item.qty);
+    // Validation: Only HP requires strict IMEI selection. 
+    // Others (Kartu Perdana) are optional; backend will auto-pick if available.
+    const isStrictImeiCategory = (cat) => cat?.trim().toUpperCase() === "HP";
+    const hpMissingImei = cart.find(item => isStrictImeiCategory(item.category) && (item.selectedImeis?.length || 0) < item.qty);
     if (hpMissingImei) {
       alert(`Produk ${hpMissingImei.name} memerlukan ${hpMissingImei.qty} IMEI. Silakan pilih IMEI terlebih dahulu.`);
       return;
@@ -342,7 +344,7 @@ export default function RetailPOSPage() {
                     </div>
 
                     {/* IMEI Section for IMEI-tracked items */}
-                    {item.category === "HP" && (
+                    {["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(item.category?.trim().toUpperCase()) && (
                       <div className="pl-1 flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">IMEI ({item.selectedImeis?.length || 0}/{item.qty})</span>

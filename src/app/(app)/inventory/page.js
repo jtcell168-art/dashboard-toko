@@ -103,11 +103,6 @@ export default function InventoryPage() {
     reader.readAsBinaryString(file);
   };
 
-  // Load data
-  useEffect(() => {
-    setIsMounted(true);
-    if (!branchIsMounted) return;
-
     async function loadData() {
       setIsLoading(true);
       const user = await getCurrentUser();
@@ -141,6 +136,11 @@ export default function InventoryPage() {
       setDbProducts(mapped);
       setIsLoading(false);
     }
+
+  // Load data
+  useEffect(() => {
+    setIsMounted(true);
+    if (!branchIsMounted) return;
     loadData();
   }, [selectedBranch, branchIsMounted]);
 
@@ -1031,9 +1031,9 @@ export default function InventoryPage() {
                   <span className="material-symbols-outlined text-[18px]">inventory_2</span>
                   Update Stok per Cabang
                 </h4>
-                {editForm.category === "HP" ? (
+                {["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(editForm.category?.toUpperCase()) ? (
                   <span className="text-[9px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 animate-pulse">
-                    Otomatis dari Jumlah IMEI
+                    Otomatis dari Jumlah IMEI (Fallback Manual)
                   </span>
                 ) : (
                   <span className="text-[9px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
@@ -1048,8 +1048,7 @@ export default function InventoryPage() {
                     <label className="text-[10px] text-white/30 uppercase">{b.name}</label>
                     <input 
                       type="number" 
-                      className={`input-field text-center font-bold ${editForm.category === "HP" ? "opacity-50 cursor-not-allowed" : ""}`} 
-                      readOnly={editForm.category === "HP"} 
+                      className={`input-field text-center font-bold`} 
                       min="0" 
                       value={editForm.stocks[b.id] || 0} 
                       onChange={e => setEditForm({
@@ -1219,17 +1218,20 @@ export default function InventoryPage() {
           branches={branches}
           onClose={() => setManageImeiProduct(null)}
           onRefresh={async () => {
-            // Instead of reload, just fetch the new list for the edit modal
-            try {
-              const supabase = createClient();
-              const { data } = await supabase
-                .from("imei_records")
-                .select("*")
-                .eq("product_id", manageImeiProduct.id)
-                .order("status", { ascending: true });
-              setEditImeis(data || []);
-            } catch (err) {
-              console.error("Sync error:", err);
+            await loadData();
+            // Also sync editImeis if modal was opened from Edit
+            if (editingId) {
+              try {
+                const supabase = createClient();
+                const { data } = await supabase
+                  .from("imei_records")
+                  .select("*")
+                  .eq("product_id", manageImeiProduct.id)
+                  .order("status", { ascending: true });
+                setEditImeis(data || []);
+              } catch (err) {
+                console.error("Sync error:", err);
+              }
             }
           }}
         />
