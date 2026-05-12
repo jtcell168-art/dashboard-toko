@@ -976,9 +976,9 @@ export default function InventoryPage() {
       {/* MODALS - Moved to root level to avoid clipping and animation issues */}
       {/* Edit Modal (Fixed Overlay) */}
       {editingId && editForm && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+        <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black/60 backdrop-blur-md flex justify-center items-start p-2 sm:p-4">
           <div className="fixed inset-0" onClick={cancelEdit} />
-          <div className="glass-card w-full max-w-4xl max-h-[95vh] overflow-y-auto relative animate-scale-in p-4 sm:p-8 border-indigo-500/30 flex flex-col z-10">
+          <div className="glass-card w-full max-w-4xl my-auto relative animate-scale-in p-4 sm:p-8 border-indigo-500/30 flex flex-col z-10">
 
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -1127,9 +1127,9 @@ export default function InventoryPage() {
 
       {/* Price History Modal */}
       {showPriceModal && priceHistoryProduct && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+        <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black/60 backdrop-blur-md flex justify-center items-start p-2 sm:p-4">
           <div className="fixed inset-0" onClick={() => setShowPriceModal(false)} />
-          <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative animate-scale-in z-10">
+          <div className="glass-card w-full max-w-2xl my-auto overflow-hidden flex flex-col relative animate-scale-in z-10">
             <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
               <div>
                 <h3 className="text-base font-bold text-white">{priceHistoryProduct.name}</h3>
