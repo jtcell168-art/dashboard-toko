@@ -1,19 +1,41 @@
+
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config({ path: '.env.local' });
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function checkTransactions() {
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('invoice_no, total, status, branch_id, created_at')
-    .limit(10);
-  
-  if (error) {
-    console.error(error);
-    return;
+async function checkTrx() {
+  const invoices = ['TRX-1778674962040-876', 'TRX-1778656400494-702'];
+  console.log('--- CHECKING TRANSACTIONS ---');
+
+  for (const inv of invoices) {
+    console.log(`\nInvoice: ${inv}`);
+    const { data: trx, error } = await supabase
+      .from('transactions')
+      .select('*, transaction_items(*, products(*, categories(name)))')
+      .eq('invoice_no', inv)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Error:', error);
+      continue;
+    }
+
+    if (!trx) {
+      console.log('Transaction not found.');
+      continue;
+    }
+
+    console.log(`Customer: ${trx.customer_name}`);
+    trx.transaction_items?.forEach(item => {
+      const p = item.products;
+      console.log(`- Product: "${p?.name}" (ID: ${p?.id})`);
+      console.log(`- Category: "${p?.categories?.name}"`);
+      console.log(`- Qty Sold: ${item.quantity}`);
+    });
   }
-  console.log('Sample transactions:', JSON.stringify(data, null, 2));
 }
 
-checkTransactions();
+checkTrx();
