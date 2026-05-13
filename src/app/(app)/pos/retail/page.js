@@ -87,13 +87,38 @@ export default function RetailPOSPage() {
   const addToCart = (product) => {
     setCart((prev) => {
       const existingIdx = prev.findIndex((item) => item.id === product.id);
+      
+      // Auto-select IMEI if searched by IMEI
+      const q = search.trim();
+      const matchedImeiStr = (product.imeis || []).find(i => i.toLowerCase() === q.toLowerCase());
+      
+      // Note: in this POS, selectedImeis stores the IMEI string directly or an object.
+      // Based on line 364: {imei.imei}, it seems it expects objects.
+      // But getPosProducts returns strings in 'imeis' array.
+      // Let's check consistency.
+      
       if (existingIdx !== -1) {
-        return prev.map((item, idx) =>
-          idx === existingIdx ? { ...item, qty: item.qty + 1 } : item
-        );
+        return prev.map((item, idx) => {
+          if (idx === existingIdx) {
+            const newQty = item.qty + 1;
+            let newSelectedImeis = [...(item.selectedImeis || [])];
+            
+            if (matchedImeiStr && !newSelectedImeis.some(i => (typeof i === 'string' ? i : i.imei) === matchedImeiStr)) {
+              newSelectedImeis.push({ id: Date.now(), imei: matchedImeiStr });
+            }
+            
+            return { ...item, qty: newQty, selectedImeis: newSelectedImeis };
+          }
+          return item;
+        });
       }
-      return [...prev, { ...product, qty: 1, selectedImeis: [] }];
+
+      const initialImeis = matchedImeiStr ? [{ id: Date.now(), imei: matchedImeiStr }] : [];
+      return [...prev, { ...product, qty: 1, selectedImeis: initialImeis }];
     });
+
+    // Clear search if it was an IMEI scan
+    if (search.length > 8) setSearch("");
   };
 
   const selectImei = (productId, itemIdx, imei) => {

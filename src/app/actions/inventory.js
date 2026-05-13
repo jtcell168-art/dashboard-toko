@@ -65,8 +65,8 @@ export async function getInventory(branchId = "all") {
         categoryName = Array.isArray(p.categories) ? p.categories[0]?.name : p.categories?.name;
       }
       
-      const trackedCategories = ["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"];
-      const isImeiTracked = trackedCategories.includes(categoryName?.trim().toUpperCase());
+      const trackedCategories = ["HP", "HANDPHONE", "SMARTPHONE", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"];
+      const isImeiTracked = trackedCategories.some(c => categoryName?.trim().toUpperCase().includes(c));
       // Group and sum stock records by branch ID to handle potential duplicates
       const branchStockMap = {};
       p.stock?.forEach(s => {
@@ -441,7 +441,11 @@ export async function bulkImportProducts(productsArray) {
         }
 
         // 4. Process IMEIs if HP
-        if (item.category?.toUpperCase() === "HP" || product.category_id) {
+        const categoryName = item.category?.trim().toUpperCase() || "";
+        const trackedCategories = ["HP", "HANDPHONE", "SMARTPHONE", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"];
+        const isImeiTracked = trackedCategories.some(c => categoryName.includes(c));
+
+        if (isImeiTracked || product.category_id) {
           const imeiInserts = [];
           
           const processImeis = (str, branchId) => {
@@ -576,6 +580,12 @@ export async function receiveTransfer(transferId) {
     }
 
     // 2. Tambahkan stok ke cabang tujuan (Stok asal sudah dikurangi saat submitTransfer)
+    const { data: product } = await supabase
+      .from("products")
+      .select("*, categories(name)")
+      .eq("id", transfer.product_id)
+      .single();
+
     const { data: toStock } = await supabase
       .from("stock")
       .select("quantity")
@@ -621,7 +631,10 @@ export async function receiveTransfer(transferId) {
       // Fallback: If it's an IMEI-tracked category but no IMEIs were explicitly marked, 
       // move available ones from the source branch to match the quantity.
       const categoryName = product?.categories?.name?.trim().toUpperCase();
-      if (["HP", "KARTU PERDANA", "PERDANA"].includes(categoryName)) {
+      const trackedCategories = ["HP", "HANDPHONE", "SMARTPHONE", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"];
+      const isImeiTracked = trackedCategories.some(c => categoryName?.includes(c));
+      
+      if (isImeiTracked) {
         const { data: availableImeis } = await supabase
           .from("imei_records")
           .select("id")
@@ -676,7 +689,10 @@ export async function syncStockWithImeis(supabase, productId, branchId) {
       .single();
 
     const categoryName = product?.categories?.name?.trim().toUpperCase();
-    if (["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"].includes(categoryName)) {
+    const trackedCategories = ["HP", "HANDPHONE", "SMARTPHONE"];
+    const isImeiTracked = trackedCategories.some(c => categoryName?.includes(c));
+
+    if (isImeiTracked) {
       const { count } = await supabase
         .from("imei_records")
         .select("*", { count: 'exact', head: true })

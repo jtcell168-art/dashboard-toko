@@ -56,7 +56,8 @@ export async function getPosProducts(branchId = "all") {
         categoryName = Array.isArray(product.categories) ? product.categories[0]?.name : product.categories?.name;
       }
       
-      const isImeiTracked = categoryName?.trim().toUpperCase() === "HP";
+      const trackedCategories = ["HP", "HANDPHONE", "SMARTPHONE", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"];
+      const isImeiTracked = trackedCategories.some(c => categoryName?.trim().toUpperCase().includes(c));
       let filteredStock = product.stock || [];
       let productImeis = [];
  
@@ -206,84 +207,84 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
     if (insError) throw new Error("Gagal mencatat data cicilan: " + insError.message);
   }
 
-  // 2. Insert item-item ke transaction_items & kurangi stok
-  for (const item of cart) {
-    const { data: itemData } = await supabase.from("transaction_items").insert({
-      transaction_id: transaction.id,
-      product_id: item.id,
-      product_name: item.name,
-      quantity: item.qty,
-      unit_price: item.sellPrice,
-      subtotal: item.sellPrice * item.qty
-    }).select().single();
+    // 2. Insert item-item ke transaction_items & kurangi stok
+    for (const item of cart) {
+      await supabase.from("transaction_items").insert({
+        transaction_id: transaction.id,
+        product_id: item.id,
+        product_name: item.name,
+        quantity: item.qty,
+        unit_price: item.sellPrice,
+        subtotal: item.sellPrice * item.qty
+      });
 
-      const trackedCategories = ["HP", "KARTU PERDANA", "PERDANA", "KARTU", "STARTER PACK"];
-      const isImeiTracked = trackedCategories.includes(item.category?.trim().toUpperCase());
-      if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
+      // Determined target branch for stock reduction
+      // If branchId is 'all', we should use the transaction's branch_id (which might be the cashier's branch)
+      const targetBranchId = (branchId && branchId !== "all") ? branchId : transaction.branch_id;
+
+      if (!item.is_service && !item.is_digital && targetBranchId) {
+        const trackedCategories = ["HP", "HANDPHONE", "SMARTPHONE"];
+        const isImeiTracked = trackedCategories.some(c => item.category?.trim().toUpperCase().includes(c));
+
+        // A. Handle IMEI-tracked products
         if (isImeiTracked) {
-        let imeisToSold = [];
-        if (item.selectedImeis && item.selectedImeis.length > 0) {
-          imeisToSold = item.selectedImeis;
-        } else {
-          const { data: availableImeis } = await supabase
-            .from("imei_records")
-            .select("id, imei")
-            .eq("product_id", item.id)
-            .eq("branch_id", branchId)
-            .eq("status", "stock")
-            .order("created_at", { ascending: true })
-            .limit(item.qty);
-          imeisToSold = availableImeis || [];
-        }
-
-        if (imeisToSold.length > 0) {
-          for (const imei of imeisToSold) {
-            await supabase
+          let imeisToSold = [];
+          if (item.selectedImeis && item.selectedImeis.length > 0) {
+            imeisToSold = item.selectedImeis;
+          } else {
+            const { data: availableImeis } = await supabase
               .from("imei_records")
-              .update({ 
-                status: "sold", 
-                sold_at: new Date().toISOString(),
-                customer_name: customerName,
-                customer_phone: customerPhone,
-                customer_address: customerAddress
-              })
+              .select("id, imei")
+              .eq("product_id", item.id)
+              .eq("branch_id", targetBranchId)
+              .eq("status", "stock")
+              .order("created_at", { ascending: true })
+              .limit(item.qty);
+            imeisToSold = availableImeis || [];
+          }
 
-              .eq("id", imei.id);
+          if (imeisToSold.length > 0) {
+            for (const imei of imeisToSold) {
+              await supabase
+                .from("imei_records")
+                .update({ 
+                  status: "sold", 
+                  sold_at: new Date().toISOString(),
+                  customer_name: customerName,
+                  customer_phone: customerPhone,
+                  customer_address: customerAddress
+                })
+                .eq("id", imei.id);
+            }
           }
         }
-      }
 
-      // 2. Reduce stock quantity in 'stock' table
-      if (!item.is_service && !item.is_digital && branchId && branchId !== "all") {
-        // Use upsert to handle cases where stock record might not exist yet
+        // B. Handle Stock table reduction (for BOTH IMEI and non-IMEI items)
         const { data: currentStock } = await supabase
           .from("stock")
           .select("quantity")
           .eq("product_id", item.id)
-          .eq("branch_id", branchId)
+          .eq("branch_id", targetBranchId)
           .maybeSingle();
 
         const oldQty = currentStock?.quantity || 0;
         const newQty = Math.max(0, oldQty - item.qty);
 
-        const { error: stockError } = await supabase
+        await supabase
           .from("stock")
           .upsert({
             product_id: item.id,
-            branch_id: branchId,
+            branch_id: targetBranchId,
             quantity: newQty,
             updated_at: new Date().toISOString()
           }, { onConflict: 'product_id,branch_id' });
 
-        if (stockError) console.error(`Error updating stock for ${item.name}:`, stockError);
-
-        // 3. For IMEI tracked categories, sync again to be absolutely sure
+        // C. Final sync for IMEI items to be 100% sure
         if (isImeiTracked) {
-          await syncStockWithImeis(supabase, item.id, branchId);
+          await syncStockWithImeis(supabase, item.id, targetBranchId);
         }
       }
     }
-  }
 
   return transaction;
 }
