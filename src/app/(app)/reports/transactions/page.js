@@ -17,7 +17,10 @@ export default function TransactionReportPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedTrxId, setSelectedTrxId] = useState(null);
   
-  // Date Filter State
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const ITEMS_PER_PAGE = 50;
+
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(1); 
@@ -26,6 +29,9 @@ export default function TransactionReportPage() {
   const [endDate, setEndDate] = useState(() => {
     return new Date().toISOString().split("T")[0];
   });
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [startDate, endDate, selectedBranch]);
 
   useEffect(() => {
     if (!branchIsMounted) return;
@@ -42,7 +48,7 @@ export default function TransactionReportPage() {
       
       let query = supabase
         .from("transactions")
-        .select("*, profiles(full_name), branches(name)")
+        .select("*, profiles(full_name), branches(name)", { count: "exact" })
         .order("created_at", { ascending: false });
         
       if (startDate) query = query.gte("created_at", startDate);
@@ -52,14 +58,19 @@ export default function TransactionReportPage() {
       const targetBranch = canFilterBranch ? selectedBranch : (user?.branch_id || "all");
       if (targetBranch !== "all" && targetBranch !== null) query = query.eq("branch_id", targetBranch);
       
-      const { data: trx } = await query;
+      const from = (page - 1) * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+      query = query.range(from, to);
+
+      const { data: trx, count } = await query;
       
       setCurrentUser(user);
       setData(trx || []);
+      setTotalRecords(count || 0);
       setIsLoading(false);
     }
     load();
-  }, [startDate, endDate, selectedBranch, branchIsMounted]);
+  }, [startDate, endDate, selectedBranch, branchIsMounted, page]);
 
   const handleDelete = async (id) => {
     if (!confirm("Yakin ingin menghapus transaksi ini? Data akan terhapus permanen dari database.")) return;
@@ -72,8 +83,28 @@ export default function TransactionReportPage() {
     }
   };
 
-  const handleExport = () => {
-    const exportData = data.map(t => ({
+  const handleExport = async () => {
+    setIsLoading(true);
+    const supabase = createClient();
+    
+    let query = supabase
+      .from("transactions")
+      .select("*, profiles(full_name), branches(name)")
+      .order("created_at", { ascending: false });
+      
+    if (startDate) query = query.gte("created_at", startDate);
+    if (endDate) query = query.lte("created_at", endDate + "T23:59:59");
+    
+    const canFilterBranch = currentUser?.role === "owner" || currentUser?.role === "manager" || currentUser?.role === "teknisi";
+    const targetBranch = canFilterBranch ? selectedBranch : (currentUser?.branch_id || "all");
+    if (targetBranch !== "all" && targetBranch !== null) query = query.eq("branch_id", targetBranch);
+    
+    const { data: allData } = await query;
+    setIsLoading(false);
+
+    if (!allData || allData.length === 0) return alert("Tidak ada data untuk diexport.");
+
+    const exportData = allData.map(t => ({
       Tanggal: new Date(t.created_at).toLocaleString("id-ID"),
       Invoice: t.invoice_no,
       Cabang: t.branches?.name,
@@ -83,12 +114,11 @@ export default function TransactionReportPage() {
       No_HP: t.customer_phone || "-",
       Alamat: t.customer_address || "-",
       Metode_Bayar: t.payment_method,
-
       Keterangan: t.notes || "-",
       Total: t.total,
       Status: t.status
     }));
-    exportToExcel(exportData, "Laporan_Transaksi");
+    exportToExcel(exportData, "Laporan_Transaksi_Full");
   };
 
   const handleDownloadSummaryJPG = () => {
@@ -165,7 +195,7 @@ export default function TransactionReportPage() {
           <div className="flex flex-col gap-1">
             <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Laporan Transaksi</h1>
             <p className="text-xs md:text-sm text-white/40">
-              {selectedBranch === 'all' ? 'Semua Cabang' : branches.find(b => b.id === selectedBranch)?.name} — {data.length} Transaksi
+              {selectedBranch === 'all' ? 'Semua Cabang' : branches.find(b => b.id === selectedBranch)?.name} — {totalRecords} Transaksi Ditemukan
             </p>
           </div>
 
@@ -290,6 +320,34 @@ export default function TransactionReportPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalRecords > ITEMS_PER_PAGE && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-2 p-4 bg-white/5 rounded-xl border border-white/10 no-print-buttons">
+            <p className="text-xs text-white/50">
+              Menampilkan {((page - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(page * ITEMS_PER_PAGE, totalRecords)} dari {totalRecords} data
+            </p>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs disabled:opacity-30 transition-all"
+              >
+                Sebelumnya
+              </button>
+              <div className="px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+                Hal {page} dari {Math.ceil(totalRecords / ITEMS_PER_PAGE)}
+              </div>
+              <button 
+                onClick={() => setPage(p => Math.min(Math.ceil(totalRecords / ITEMS_PER_PAGE), p + 1))}
+                disabled={page === Math.ceil(totalRecords / ITEMS_PER_PAGE)}
+                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs disabled:opacity-30 transition-all"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Detail */}

@@ -14,6 +14,7 @@ const PAYMENT_METHODS = [
   { id: "qris", label: "QRIS", icon: "qr_code_2" },
   { id: "card", label: "Debit/Credit", icon: "credit_card" },
   { id: "installment", label: "Cicilan", icon: "calendar_month" },
+  { id: "piutang", label: "Piutang / Bon", icon: "receipt_long" },
 ];
 
 const CREDIT_PROVIDERS = ["Vast Finance", "Kredivo Reguler", "Yess Kredit", "Spektra", "Bank"];
@@ -598,7 +599,7 @@ export default function RetailPOSPage() {
    RECEIPT VIEW
    ============================ */
 function ReceiptView({ cart, subtotal, discountAmount, total, paymentMethod, customerName, onNewTransaction, branchInfo, creditProvider, installmentData }) {
-  const pmLabels = { cash: "Cash", transfer: "Transfer Bank", qris: "QRIS", card: "Debit / Credit", installment: "Cicilan Internal" };
+  const pmLabels = { cash: "Cash", transfer: "Transfer Bank", qris: "QRIS", card: "Debit / Credit", installment: "Cicilan Internal", piutang: "Piutang / Bon (Belum Lunas)" };
   const trxId = `TRX-${Date.now().toString(36).toUpperCase().slice(-6)}`;
   const now = new Date();
 

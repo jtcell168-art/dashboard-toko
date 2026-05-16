@@ -157,27 +157,37 @@ export async function createServiceTicket(ticketData) {
           subtotal: part.unitPrice * part.qty,
         });
 
-        // 2b. Deduct stock from inventory
+        // 2b. Deduct stock from inventory (ATOMIC)
         if (targetBranch) {
-          const { data: currentStock } = await supabase
-            .from("stock")
-            .select("quantity")
-            .eq("product_id", part.id)
-            .eq("branch_id", targetBranch)
-            .maybeSingle();
+          const { error: rpcError } = await supabase.rpc("decrement_stock", {
+            p_product_id: part.id,
+            p_branch_id: targetBranch,
+            p_quantity: part.qty
+          });
 
-          const oldQty = currentStock?.quantity || 0;
-          const newQty = Math.max(0, oldQty - part.qty);
+          // Fallback if RPC fails or not yet created
+          if (rpcError) {
+            console.warn("RPC decrement_stock failed in service, using manual fallback.", rpcError);
+            const { data: currentStock } = await supabase
+              .from("stock")
+              .select("quantity")
+              .eq("product_id", part.id)
+              .eq("branch_id", targetBranch)
+              .maybeSingle();
 
-          await supabase.from("stock").upsert(
-            {
-              product_id: part.id,
-              branch_id: targetBranch,
-              quantity: newQty,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "product_id,branch_id" }
-          );
+            const oldQty = currentStock?.quantity || 0;
+            const newQty = Math.max(0, oldQty - part.qty);
+
+            await supabase.from("stock").upsert(
+              {
+                product_id: part.id,
+                branch_id: targetBranch,
+                quantity: newQty,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "product_id,branch_id" }
+            );
+          }
         }
       }
     }
@@ -185,6 +195,72 @@ export async function createServiceTicket(ticketData) {
     return { success: true, data: ticket };
   } catch (err) {
     console.error("Error creating service ticket:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+// Update service ticket status
+export async function updateServiceStatus(ticketId, newStatus) {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Unauthorized");
+
+    // Get the ticket
+    const { data: ticket, error: fetchError } = await supabase
+      .from("service_tickets")
+      .select("*, service_ticket_parts(*)")
+      .eq("id", ticketId)
+      .single();
+
+    if (fetchError || !ticket) throw new Error("Ticket tidak ditemukan");
+
+    // If changing to 'cancelled', restore stock
+    if (newStatus === "cancelled" && ticket.status !== "cancelled") {
+      for (const part of ticket.service_ticket_parts || []) {
+        if (!part.product_id || !ticket.branch_id) continue;
+
+        const { error: rpcError } = await supabase.rpc("increment_stock", {
+          p_product_id: part.product_id,
+          p_branch_id: ticket.branch_id,
+          p_quantity: part.quantity
+        });
+
+        // Fallback
+        if (rpcError) {
+          console.warn("RPC increment_stock failed, manual fallback.", rpcError);
+          const { data: currentStock } = await supabase
+            .from("stock")
+            .select("quantity")
+            .eq("product_id", part.product_id)
+            .eq("branch_id", ticket.branch_id)
+            .maybeSingle();
+
+          await supabase.from("stock").upsert({
+            product_id: part.product_id,
+            branch_id: ticket.branch_id,
+            quantity: (currentStock?.quantity || 0) + part.quantity,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "product_id,branch_id" });
+        }
+      }
+    }
+
+    // If changing from 'cancelled' to something else, re-deduct stock? 
+    // Usually cancelled is final. We'll leave this edge case for now.
+
+    const updateData = { status: newStatus };
+    if (newStatus === "done") updateData.completed_at = new Date().toISOString();
+
+    const { error: updateError } = await supabase
+      .from("service_tickets")
+      .update(updateData)
+      .eq("id", ticketId);
+
+    if (updateError) throw updateError;
+    return { success: true };
+  } catch (err) {
+    console.error("Error updating service status:", err);
     return { success: false, error: err.message };
   }
 }

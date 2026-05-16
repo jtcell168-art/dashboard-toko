@@ -207,6 +207,23 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
     if (insError) throw new Error("Gagal mencatat data cicilan: " + insError.message);
   }
 
+  // Handle Piutang Pelanggan (Customer Debt)
+  if (paymentMethod === "piutang") {
+    const { error: piutangError } = await supabase
+      .from("customer_debts")
+      .insert({
+        transaction_id: transaction.id,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        total_amount: total,
+        paid_amount: 0,
+        status: "unpaid",
+        branch_id: branchId && branchId !== "all" ? branchId : null,
+      });
+
+    if (piutangError) throw new Error("Gagal mencatat piutang: " + piutangError.message);
+  }
+
     // 2. Insert item-item ke transaction_items & kurangi stok
     for (const item of cart) {
       await supabase.from("transaction_items").insert({
@@ -259,25 +276,33 @@ export async function processTransaction(cart, discountAmount, paymentMethod, cu
           }
         }
 
-        // B. Handle Stock table reduction (for BOTH IMEI and non-IMEI items)
-        const { data: currentStock } = await supabase
-          .from("stock")
-          .select("quantity")
-          .eq("product_id", item.id)
-          .eq("branch_id", targetBranchId)
-          .maybeSingle();
+        // B. Handle Stock table reduction (ATOMIC via RPC)
+        const { error: rpcError } = await supabase.rpc("decrement_stock", {
+          p_product_id: item.id,
+          p_branch_id: targetBranchId,
+          p_quantity: item.qty
+        });
 
-        const oldQty = currentStock?.quantity || 0;
-        const newQty = Math.max(0, oldQty - item.qty);
+        // Fallback manual jika RPC belum dibuat oleh user (untuk mencegah error)
+        if (rpcError) {
+          console.warn("RPC decrement_stock failed/not found, using manual fallback.", rpcError);
+          const { data: currentStock } = await supabase
+            .from("stock")
+            .select("quantity")
+            .eq("product_id", item.id)
+            .eq("branch_id", targetBranchId)
+            .maybeSingle();
 
-        await supabase
-          .from("stock")
-          .upsert({
+          const oldQty = currentStock?.quantity || 0;
+          const newQty = Math.max(0, oldQty - item.qty);
+
+          await supabase.from("stock").upsert({
             product_id: item.id,
             branch_id: targetBranchId,
             quantity: newQty,
             updated_at: new Date().toISOString()
           }, { onConflict: 'product_id,branch_id' });
+        }
 
         // C. Final sync for IMEI items to be 100% sure
         if (isImeiTracked) {
@@ -416,22 +441,31 @@ export async function deleteTransaction(transactionId) {
         .limit(item.quantity);
     }
 
-    // 3b. Restore stock quantity
-    const { data: currentStock } = await supabase
-      .from("stock")
-      .select("quantity")
-      .eq("product_id", item.product_id)
-      .eq("branch_id", trx.branch_id)
-      .maybeSingle();
+    // 3b. Restore stock quantity (ATOMIC via RPC)
+    const { error: rpcError } = await supabase.rpc("increment_stock", {
+      p_product_id: item.product_id,
+      p_branch_id: trx.branch_id,
+      p_quantity: item.quantity
+    });
 
-    const restoredQty = (currentStock?.quantity || 0) + (item.quantity || 1);
+    if (rpcError) {
+      console.warn("RPC increment_stock failed, manual fallback.", rpcError);
+      const { data: currentStock } = await supabase
+        .from("stock")
+        .select("quantity")
+        .eq("product_id", item.product_id)
+        .eq("branch_id", trx.branch_id)
+        .maybeSingle();
 
-    await supabase.from("stock").upsert({
-      product_id: item.product_id,
-      branch_id: trx.branch_id,
-      quantity: restoredQty,
-      updated_at: new Date().toISOString()
-    }, { onConflict: "product_id,branch_id" });
+      const restoredQty = (currentStock?.quantity || 0) + (item.quantity || 1);
+
+      await supabase.from("stock").upsert({
+        product_id: item.product_id,
+        branch_id: trx.branch_id,
+        quantity: restoredQty,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "product_id,branch_id" });
+    }
   }
 
   // 4. Hapus transaksi (cascade deletes transaction_items)

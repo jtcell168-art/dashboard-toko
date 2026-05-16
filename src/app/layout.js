@@ -1,5 +1,6 @@
 import "./globals.css";
 import ThemeLoader from "@/components/ThemeLoader";
+import OfflineDetector from "@/components/OfflineDetector";
 
 export const metadata = {
   title: "Lumina ERP — Smart POS & Service Management",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
+        <OfflineDetector />
         <ThemeLoader />
         {children}
       </body>
