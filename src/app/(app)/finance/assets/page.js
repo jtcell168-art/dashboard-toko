@@ -7,7 +7,7 @@ import { useBranch } from "@/context/BranchContext";
 import { formatRupiah } from "@/data/mockData";
 import ImageUpload from "@/components/ImageUpload";
 
-const CATEGORIES = ["Elektronik", "Furniture", "Bangunan", "Kendaraan", "Lainnya"];
+const CATEGORIES = ["Elektronik", "Alat Service HP", "Furniture", "Bangunan", "Kendaraan", "Lainnya"];
 
 export default function AssetsPage() {
   const { selectedBranch, isMounted } = useBranch();
