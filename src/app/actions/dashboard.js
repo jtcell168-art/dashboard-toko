@@ -303,6 +303,25 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       }
     }
 
+    // 13. Deletion logs (Owner/Manager)
+    let deletionLogs = [];
+    if (isOwner || isManager) {
+      const { data: logs } = await supabase
+        .from("deletion_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      deletionLogs = (logs || []).map(l => ({
+        id: l.id,
+        tableName: l.table_name,
+        invoiceNo: l.deleted_data?.invoice_no || "-",
+        total: l.deleted_data?.total || 0,
+        deletedBy: l.deleted_by_name || "Unknown",
+        reason: l.reason,
+        deletedAt: l.created_at,
+      }));
+    }
+
     return {
       kpi: {
         revenue: totalRevenue,
@@ -322,6 +341,7 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       revenueByBranch,
       serviceAlerts: mappedAlerts,
       attendanceIssues,
+      deletionLogs,
       userRole: profile?.role
     };
   } catch (error) {

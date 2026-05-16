@@ -488,6 +488,21 @@ export default function InventoryPage() {
             <span className="sm:hidden">Import</span>
           </label>
 
+
+          <button 
+            onClick={() => exportToExcel([
+              { Nama: "Contoh: Samsung Galaxy A54", SKU: "HP-SA54-BLK", Kategori: "HP", "Harga Beli": 3200000, "Harga Jual": 3800000, "Stok Ruteng": 2, "IMEI Ruteng": "123456789012345", "Stok Larantuka": 1, "IMEI Larantuka": "987654321098765", "Stok Riung": 0, "IMEI Riung": "" },
+              { Nama: "Contoh: LCD Samsung A54 OEM", SKU: "SPC-LCD-SA54", Kategori: "Sparepart", "Harga Beli": 280000, "Harga Jual": 450000, "Stok Ruteng": 3, "IMEI Ruteng": "", "Stok Larantuka": 2, "IMEI Larantuka": "", "Stok Riung": 1, "IMEI Riung": "" },
+              { Nama: "Contoh: Charger Type-C 25W", SKU: "AKS-CHG-TC25", Kategori: "Aksesori", "Harga Beli": 25000, "Harga Jual": 50000, "Stok Ruteng": 10, "IMEI Ruteng": "", "Stok Larantuka": 5, "IMEI Larantuka": "", "Stok Riung": 8, "IMEI Riung": "" },
+              { Nama: "Contoh: Kartu Perdana Telkomsel 10K", SKU: "KP-TSEL-10K", Kategori: "Kartu Perdana", "Harga Beli": 7000, "Harga Jual": 12000, "Stok Ruteng": 50, "IMEI Ruteng": "", "Stok Larantuka": 30, "IMEI Larantuka": "", "Stok Riung": 40, "IMEI Riung": "" },
+            ], "Template_Import_Stok_Baru")}
+            className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-white/10 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            <span className="hidden sm:inline">Download Template</span>
+            <span className="sm:hidden">Template</span>
+          </button>
+
           <button 
             onClick={() => exportToExcel(filtered.map(p => {
               const rutengId = branches.find(b => b.name.toLowerCase().includes("ruteng"))?.id;
@@ -508,12 +523,12 @@ export default function InventoryPage() {
                 "IMEI Riung": riungId ? p.imeiStrings[riungId] : "",
                 "Total Stok": Object.values(p.stocks).reduce((a,b) => a+b, 0)
               };
-            }), "Template_Migrasi_Stok")}
+            }), "Export_Data_Inventaris")}
             className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-white/10 transition-all"
           >
-            <span className="material-symbols-outlined text-[18px]">download</span>
-            <span className="hidden sm:inline">Download Template</span>
-            <span className="sm:hidden">Template</span>
+            <span className="material-symbols-outlined text-[18px]">file_download</span>
+            <span className="hidden sm:inline">Export Data</span>
+            <span className="sm:hidden">Export</span>
           </button>
           
           <button 

@@ -10,6 +10,7 @@ import {
 import { getDashboardData } from "@/app/actions/dashboard";
 import { getEmployees } from "@/app/actions/salaries";
 import { sendNotification } from "@/app/actions/notifications";
+import { deleteTransaction } from "@/app/actions/pos";
 import { useBranch } from "@/context/BranchContext";
 import { upsertSalary } from "@/app/actions/salaries"; // Import missing action
 import ImageUpload from "@/components/ImageUpload";
@@ -136,9 +137,10 @@ const getBranchName = (trx) => {
   return "Tanpa Cabang";
 };
 
-function RecentTransactions({ transactions = [] }) {
+function RecentTransactions({ transactions = [], userRole, onDelete }) {
   const typeIcons = { retail: "shopping_bag", service: "build", digital: "phone_iphone" };
   const typeColors = { retail: "#6366F1", service: "#F59E0B", digital: "#3B82F6" };
+  const canDelete = userRole === "owner" || userRole === "manager";
 
   return (
     <div className="chart-card">
@@ -150,7 +152,7 @@ function RecentTransactions({ transactions = [] }) {
         {transactions.length === 0 ? (
           <p className="text-xs text-white/40 text-center py-4">Belum ada transaksi</p>
         ) : transactions.map((trx) => (
-          <div key={trx.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors">
+          <div key={trx.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors group">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${typeColors[trx.type] || '#6366F1'}15` }}>
               <span className="material-symbols-outlined text-[18px]" style={{ color: typeColors[trx.type] || '#6366F1' }}>
                 {typeIcons[trx.type] || 'shopping_bag'}
@@ -160,9 +162,20 @@ function RecentTransactions({ transactions = [] }) {
               <p className="text-xs font-medium text-white truncate">{trx.profiles?.full_name || "Kasir"} — {trx.invoice_no}</p>
               <p className="text-[10px] text-white/30 capitalize">{trx.type} · {getBranchName(trx)} · {trx.status}</p>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-xs font-semibold text-white">{formatRupiah(trx.total)}</p>
-              <p className="text-[10px] text-white/25">{new Date(trx.created_at).toLocaleDateString("id-ID")}</p>
+            <div className="text-right shrink-0 flex items-center gap-2">
+              <div>
+                <p className="text-xs font-semibold text-white">{formatRupiah(trx.total)}</p>
+                <p className="text-[10px] text-white/25">{new Date(trx.created_at).toLocaleDateString("id-ID")}</p>
+              </div>
+              {canDelete && (
+                <button
+                  onClick={() => onDelete(trx.id, trx.invoice_no)}
+                  className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-all"
+                  title="Hapus transaksi"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -336,6 +349,18 @@ export default function DashboardPage() {
       alert("Gagal mengirim pesan: " + err.message);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleDeleteTransaction = async (trxId, invoiceNo) => {
+    if (!confirm(`Yakin ingin menghapus transaksi ${invoiceNo}?\n\nStok akan dikembalikan dan data dicatat di riwayat penghapusan.`)) return;
+    try {
+      await deleteTransaction(trxId);
+      // Refresh dashboard data realtime
+      const dbData = await getDashboardData(startDate, endDate, selectedBranch);
+      setData(dbData);
+    } catch (err) {
+      alert("Gagal menghapus: " + err.message);
     }
   };
 
@@ -601,10 +626,37 @@ export default function DashboardPage() {
 
       {/* Activity Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <RecentTransactions transactions={data.recentTransactions} />
+        <RecentTransactions transactions={data.recentTransactions} userRole={data.userRole} onDelete={handleDeleteTransaction} />
         <ServiceAlerts serviceAlerts={data.serviceAlerts} />
         <AttendanceAlerts issues={data.attendanceIssues} />
       </div>
+
+      {/* Deletion History (Owner/Manager only) */}
+      {(data.userRole === "owner" || data.userRole === "manager") && data.deletionLogs?.length > 0 && (
+        <div className="chart-card border-red-500/10">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="material-symbols-outlined text-red-400 text-lg">delete_forever</span>
+            <h3 className="text-sm font-semibold text-white">Riwayat Penghapusan</h3>
+            <span className="badge danger ml-auto">{data.deletionLogs.length} record</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {data.deletionLogs.map(log => (
+              <div key={log.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[18px] text-red-400">receipt_long</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{log.invoiceNo}</p>
+                  <p className="text-[10px] text-white/30">Dihapus oleh {log.deletedBy} · {new Date(log.deletedAt).toLocaleString("id-ID")}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-bold text-red-400 tabular-nums">{formatRupiah(log.total)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
 

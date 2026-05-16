@@ -353,7 +353,7 @@ export async function processDigitalTransaction(data) {
   return transaction;
 }
 
-// HAPUS TRANSAKSI (Hanya Owner)
+// HAPUS TRANSAKSI (Hanya Owner) — dengan audit log + restore stok
 export async function deleteTransaction(transactionId) {
   const supabase = await createClient();
   const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -362,7 +362,7 @@ export async function deleteTransaction(transactionId) {
   
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", authUser.id)
     .single();
 
@@ -370,6 +370,71 @@ export async function deleteTransaction(transactionId) {
     throw new Error("Hanya owner yang diizinkan menghapus transaksi.");
   }
 
+  // 1. Ambil data transaksi + items sebelum dihapus
+  const { data: trx } = await supabase
+    .from("transactions")
+    .select("*, transaction_items(*), branches(name), profiles(full_name)")
+    .eq("id", transactionId)
+    .single();
+
+  if (!trx) throw new Error("Transaksi tidak ditemukan.");
+
+  // 2. Simpan ke deletion_logs (audit trail)
+  await supabase.from("deletion_logs").insert({
+    table_name: "transactions",
+    record_id: transactionId,
+    deleted_data: trx,
+    deleted_by: authUser.id,
+    deleted_by_name: profile?.full_name || "Owner",
+    reason: `Hapus transaksi ${trx.invoice_no} - Total ${trx.total}`
+  });
+
+  // 3. Restore stock untuk setiap item
+  const items = trx.transaction_items || [];
+  for (const item of items) {
+    if (!item.product_id || !trx.branch_id) continue;
+
+    // Check if product is IMEI-tracked
+    const { data: prod } = await supabase
+      .from("products")
+      .select("id, categories(name)")
+      .eq("id", item.product_id)
+      .maybeSingle();
+
+    const catName = prod?.categories?.name?.toUpperCase() || "";
+    const trackedCategories = ["HP", "HANDPHONE", "SMARTPHONE"];
+    const isImeiTracked = trackedCategories.some(c => catName.includes(c));
+
+    // 3a. Restore IMEI to 'stock' if applicable
+    if (isImeiTracked) {
+      await supabase
+        .from("imei_records")
+        .update({ status: "stock", sold_at: null, customer_name: null, customer_phone: null })
+        .eq("product_id", item.product_id)
+        .eq("branch_id", trx.branch_id)
+        .eq("status", "sold")
+        .limit(item.quantity);
+    }
+
+    // 3b. Restore stock quantity
+    const { data: currentStock } = await supabase
+      .from("stock")
+      .select("quantity")
+      .eq("product_id", item.product_id)
+      .eq("branch_id", trx.branch_id)
+      .maybeSingle();
+
+    const restoredQty = (currentStock?.quantity || 0) + (item.quantity || 1);
+
+    await supabase.from("stock").upsert({
+      product_id: item.product_id,
+      branch_id: trx.branch_id,
+      quantity: restoredQty,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "product_id,branch_id" });
+  }
+
+  // 4. Hapus transaksi (cascade deletes transaction_items)
   const { error } = await supabase
     .from("transactions")
     .delete()

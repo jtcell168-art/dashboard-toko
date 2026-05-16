@@ -421,22 +421,33 @@ export async function bulkImportProducts(productsArray) {
 
         if (prodError) throw prodError;
 
-        // Upsert Stocks
-        const stockInserts = [];
-        if (item.stockRuteng !== undefined && branchMap.ruteng) {
-          stockInserts.push({ product_id: product.id, branch_id: branchMap.ruteng, quantity: Number(item.stockRuteng) });
+        // Upsert Stocks — ADD to existing quantity (not replace)
+        const stockUpdates = [];
+        if (item.stockRuteng && branchMap.ruteng) {
+          stockUpdates.push({ branchId: branchMap.ruteng, addQty: Number(item.stockRuteng) });
         }
-        if (item.stockLarantuka !== undefined && branchMap.larantuka) {
-          stockInserts.push({ product_id: product.id, branch_id: branchMap.larantuka, quantity: Number(item.stockLarantuka) });
+        if (item.stockLarantuka && branchMap.larantuka) {
+          stockUpdates.push({ branchId: branchMap.larantuka, addQty: Number(item.stockLarantuka) });
         }
-        if (item.stockRiung !== undefined && branchMap.riung) {
-          stockInserts.push({ product_id: product.id, branch_id: branchMap.riung, quantity: Number(item.stockRiung) });
+        if (item.stockRiung && branchMap.riung) {
+          stockUpdates.push({ branchId: branchMap.riung, addQty: Number(item.stockRiung) });
         }
 
-        if (stockInserts.length > 0) {
+        for (const su of stockUpdates) {
+          // Get current stock first
+          const { data: existing } = await supabase
+            .from("stock")
+            .select("quantity")
+            .eq("product_id", product.id)
+            .eq("branch_id", su.branchId)
+            .maybeSingle();
+
+          const currentQty = existing?.quantity || 0;
+          const newQty = currentQty + su.addQty;
+
           const { error: stockError } = await supabase
             .from("stock")
-            .upsert(stockInserts, { onConflict: 'product_id,branch_id' });
+            .upsert({ product_id: product.id, branch_id: su.branchId, quantity: newQty, updated_at: new Date().toISOString() }, { onConflict: 'product_id,branch_id' });
           if (stockError) console.error("Stock error for SKU " + item.sku, stockError);
         }
 
