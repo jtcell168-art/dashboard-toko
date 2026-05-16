@@ -415,7 +415,7 @@ export default function DashboardPage() {
 
       {/* KPI Cards */}
       <div 
-        className={`grid grid-cols-2 md:grid-cols-3 ${data.userRole === 'owner' ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} gap-4`}
+        className={`grid grid-cols-2 md:grid-cols-3 ${data.userRole === 'owner' ? 'lg:grid-cols-4 xl:grid-cols-8' : 'lg:grid-cols-4'} gap-4`}
         suppressHydrationWarning
       >
         <KPICard
@@ -476,6 +476,28 @@ export default function DashboardPage() {
           accentClass="rose"
           href="/pos/service"
         />
+        {(data.userRole === "owner" || data.userRole === "manager") && (
+          <KPICard
+            icon="home_repair_service"
+            iconColor="#F97316"
+            title="Pendapatan Servis"
+            value={formatRupiah(data.kpi.serviceRevenue || 0)}
+            subValue={`Part: ${formatRupiah(data.kpi.servicePartsCost || 0)}`}
+            accentClass="amber"
+            href="/pos/service"
+          />
+        )}
+        {(data.userRole === "owner" || data.userRole === "manager") && (
+          <KPICard
+            icon="trending_up"
+            iconColor="#22C55E"
+            title="Laba Servis Bersih"
+            value={formatRupiah(data.kpi.serviceProfit || 0)}
+            subValue="Pendapatan − biaya part"
+            accentClass="emerald"
+            href="/pos/service"
+          />
+        )}
       </div>
 
       {/* Salary Management Area (Owner & Manager) */}

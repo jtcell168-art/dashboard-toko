@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Stepper from "@/components/ui/Stepper";
+import { getSpareparts, createServiceTicket } from "@/app/actions/service";
+import { addProduct } from "@/app/actions/inventory";
+import { useBranch } from "@/context/BranchContext";
+import { formatRupiah } from "@/data/mockData";
 
 const STEPS = [
   { label: "Input Data" },
   { label: "Keluhan" },
+  { label: "Sparepart" },
   { label: "Estimasi" },
   { label: "Konfirmasi" },
 ];
@@ -42,12 +47,22 @@ const initialFormData = {
   technicianNotes: "",
   warrantyDays: "30",
   dpAmount: "",
+  selectedParts: [], // [{ id, name, sku, qty, unitPrice, maxStock }]
 };
 
 export default function ServicePage() {
+  const { selectedBranch } = useBranch();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
+  const [spareparts, setSpareparts] = useState([]);
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setPartsLoading(true);
+    getSpareparts(selectedBranch).then(data => { setSpareparts(data); setPartsLoading(false); });
+  }, [selectedBranch]);
 
   const updateField = useCallback((field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -75,7 +90,7 @@ export default function ServicePage() {
         newErrors.keluhan = "Pilih minimal 1 keluhan atau isi detail";
       }
     }
-    if (step === 2) {
+    if (step === 3) {
       if (!formData.estimatedCost.trim()) newErrors.estimatedCost = "Estimasi biaya wajib diisi";
     }
     setErrors(newErrors);
@@ -92,10 +107,45 @@ export default function ServicePage() {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const handleSubmit = () => {
-    alert("Tiket servis berhasil dibuat! (akan terintegrasi dengan Supabase)");
-    setCurrentStep(0);
-    setFormData(initialFormData);
+  const addPart = useCallback((part) => {
+    setFormData(prev => {
+      const exists = prev.selectedParts.find(p => p.id === part.id);
+      if (exists) return prev;
+      return { ...prev, selectedParts: [...prev.selectedParts, { id: part.id, name: part.name, sku: part.sku, qty: 1, unitPrice: part.retailPrice || part.purchasePrice, maxStock: part.totalStock }] };
+    });
+  }, []);
+
+  const updatePartQty = useCallback((partId, qty) => {
+    setFormData(prev => ({ ...prev, selectedParts: prev.selectedParts.map(p => p.id === partId ? { ...p, qty: Math.max(1, Math.min(qty, p.maxStock)) } : p) }));
+  }, []);
+
+  const removePart = useCallback((partId) => {
+    setFormData(prev => ({ ...prev, selectedParts: prev.selectedParts.filter(p => p.id !== partId) }));
+  }, []);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      const issueLabels = COMMON_ISSUES.filter(i => formData.selectedIssues.includes(i.id)).map(i => i.label);
+      const res = await createServiceTicket({
+        ...formData,
+        selectedIssues: issueLabels,
+        parts: formData.selectedParts.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice })),
+        branchId: selectedBranch,
+      });
+      if (res.success) {
+        alert("Tiket servis berhasil dibuat! Stok sparepart otomatis berkurang.");
+        setCurrentStep(0);
+        setFormData(initialFormData);
+        getSpareparts(selectedBranch).then(setSpareparts);
+      } else {
+        alert("Gagal: " + res.error);
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatCurrency = (value) => {
@@ -123,9 +173,12 @@ export default function ServicePage() {
           <Step2Keluhan formData={formData} errors={errors} updateField={updateField} toggleIssue={toggleIssue} />
         )}
         {currentStep === 2 && (
-          <Step3Estimasi formData={formData} errors={errors} updateField={updateField} formatCurrency={formatCurrency} />
+          <Step2bSparepart spareparts={spareparts} loading={partsLoading} selectedParts={formData.selectedParts} addPart={addPart} updatePartQty={updatePartQty} removePart={removePart} branchId={selectedBranch} onRefresh={() => getSpareparts(selectedBranch).then(setSpareparts)} />
         )}
         {currentStep === 3 && (
+          <Step3Estimasi formData={formData} errors={errors} updateField={updateField} formatCurrency={formatCurrency} />
+        )}
+        {currentStep === 4 && (
           <Step4Konfirmasi formData={formData} />
         )}
       </div>
@@ -149,11 +202,12 @@ export default function ServicePage() {
         ) : (
           <button
             onClick={handleSubmit}
-            className="flex-1 btn-gradient py-3.5 flex items-center justify-center gap-2 text-base"
+            disabled={isSubmitting}
+            className="flex-1 btn-gradient py-3.5 flex items-center justify-center gap-2 text-base disabled:opacity-50"
             style={{ background: "linear-gradient(135deg, #10B981, #34D399)", boxShadow: "0 4px 16px rgba(16, 185, 129, 0.25)" }}
           >
-            <span className="material-symbols-outlined text-[18px]">check_circle</span>
-            <span>Buat Tiket Servis</span>
+            <span className="material-symbols-outlined text-[18px]">{isSubmitting ? "hourglass_top" : "check_circle"}</span>
+            <span>{isSubmitting ? "Memproses..." : "Buat Tiket Servis"}</span>
           </button>
         )}
       </div>
@@ -253,13 +307,40 @@ function Step2Keluhan({ formData, errors, updateField, toggleIssue }) {
    STEP 3: Estimasi
    ============================== */
 function Step3Estimasi({ formData, errors, updateField, formatCurrency }) {
+  const partsCost = formData.selectedParts.reduce((sum, p) => sum + p.unitPrice * p.qty, 0);
+  const serviceFee = Number(formData.estimatedCost || 0);
+  const grandTotal = serviceFee + partsCost;
+  const sisaBayar = Math.max(0, grandTotal - Number(formData.dpAmount || 0));
+
   return (
     <section className="glass-card p-4 flex flex-col gap-4 shadow-lg shadow-black/20">
       <div className="flex items-center gap-2 mb-1">
         <span className="material-symbols-outlined text-emerald-400 text-[20px]">calculate</span>
         <h3 className="text-lg font-semibold text-white">Estimasi Biaya</h3>
       </div>
-      <FormField label="Estimasi Biaya Servis" required error={errors.estimatedCost}>
+
+      {/* Parts cost auto-summary */}
+      {formData.selectedParts.length > 0 && (
+        <div className="rounded-xl p-3 bg-violet-500/5 border border-violet-500/10">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="material-symbols-outlined text-violet-400 text-[16px]">build</span>
+            <span className="text-xs font-bold text-violet-300 uppercase">Biaya Part ({formData.selectedParts.length} item)</span>
+          </div>
+          {formData.selectedParts.map(p => (
+            <div key={p.id} className="flex justify-between text-xs text-white/60 py-0.5">
+              <span>{p.name} x{p.qty}</span>
+              <span className="tabular-nums">Rp {new Intl.NumberFormat("id-ID").format(p.unitPrice * p.qty)}</span>
+            </div>
+          ))}
+          <div className="h-px bg-violet-500/20 my-1.5" />
+          <div className="flex justify-between text-sm font-bold">
+            <span className="text-violet-300">Subtotal Part</span>
+            <span className="text-violet-300 tabular-nums">Rp {new Intl.NumberFormat("id-ID").format(partsCost)}</span>
+          </div>
+        </div>
+      )}
+
+      <FormField label="Biaya Jasa Servis (Ongkos Kerja)" required error={errors.estimatedCost}>
         <div className="relative flex items-center">
           <div className="absolute left-0 inset-y-0 flex items-center pl-4 pointer-events-none"><span className="text-sm font-semibold text-slate-500">Rp</span></div>
           <input className="input-field pl-12 text-right tabular-nums" placeholder="0" value={formData.estimatedCost ? formatCurrency(formData.estimatedCost) : ""} onChange={(e) => updateField("estimatedCost", e.target.value.replace(/\D/g, ""))} />
@@ -289,14 +370,23 @@ function Step3Estimasi({ formData, errors, updateField, formatCurrency }) {
       <FormField label="Catatan Teknisi">
         <textarea className="input-field resize-none" rows={3} placeholder="Catatan internal untuk teknisi..." value={formData.technicianNotes} onChange={(e) => updateField("technicianNotes", e.target.value)} />
       </FormField>
-      {formData.estimatedCost && (
-        <div className="rounded-xl p-4 flex flex-col gap-2" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(52,211,153,0.04))", border: "1px solid rgba(16,185,129,0.15)" }}>
-          <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Estimasi Biaya</span><span className="text-white font-semibold tabular-nums">Rp {formatCurrency(formData.estimatedCost)}</span></div>
-          {formData.dpAmount && (<div className="flex items-center justify-between text-sm"><span className="text-slate-400">Uang Muka (DP)</span><span className="text-emerald-400 font-semibold tabular-nums">- Rp {formatCurrency(formData.dpAmount)}</span></div>)}
-          <div className="h-px bg-white/10 my-1" />
-          <div className="flex items-center justify-between text-sm"><span className="text-slate-300 font-medium">Sisa Bayar</span><span className="text-white font-bold tabular-nums text-base">Rp {formatCurrency(String(Math.max(0, Number(formData.estimatedCost || 0) - Number(formData.dpAmount || 0))))}</span></div>
-        </div>
-      )}
+
+      {/* Grand Total */}
+      <div className="rounded-xl p-4 flex flex-col gap-2" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(52,211,153,0.04))", border: "1px solid rgba(16,185,129,0.15)" }}>
+        {partsCost > 0 && (
+          <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Biaya Part</span><span className="text-violet-300 font-semibold tabular-nums">Rp {new Intl.NumberFormat("id-ID").format(partsCost)}</span></div>
+        )}
+        <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Biaya Jasa</span><span className="text-white font-semibold tabular-nums">Rp {formatCurrency(formData.estimatedCost || "0")}</span></div>
+        {(partsCost > 0 || serviceFee > 0) && <div className="h-px bg-white/10 my-0.5" />}
+        <div className="flex items-center justify-between text-sm"><span className="text-emerald-300 font-bold">Total Biaya</span><span className="text-white font-bold tabular-nums text-lg">Rp {new Intl.NumberFormat("id-ID").format(grandTotal)}</span></div>
+        {formData.dpAmount && (
+          <>
+            <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Uang Muka (DP)</span><span className="text-emerald-400 font-semibold tabular-nums">- Rp {formatCurrency(formData.dpAmount)}</span></div>
+            <div className="h-px bg-white/10 my-0.5" />
+            <div className="flex items-center justify-between text-sm"><span className="text-slate-300 font-medium">Sisa Bayar</span><span className="text-white font-bold tabular-nums text-base">Rp {new Intl.NumberFormat("id-ID").format(sisaBayar)}</span></div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -311,6 +401,7 @@ function Step4Konfirmasi({ formData }) {
   };
   const selectedIssueLabels = COMMON_ISSUES.filter((i) => formData.selectedIssues.includes(i.id)).map((i) => i.label);
   const deviceLabel = DEVICE_TYPES.find((d) => d.value === formData.deviceType)?.label || "Tidak dipilih";
+  const partsCost = formData.selectedParts.reduce((sum, p) => sum + p.unitPrice * p.qty, 0);
 
   return (
     <section className="glass-card p-4 flex flex-col gap-4 shadow-lg shadow-black/20">
@@ -324,18 +415,193 @@ function Step4Konfirmasi({ formData }) {
       <SummaryCard icon="smartphone" iconColor="text-violet-400" title="Perangkat" items={[{ label: "Tipe", value: deviceLabel }, { label: "IMEI", value: formData.imeiSerial || "-", mono: true }]} />
       <SummaryCard icon="report_problem" iconColor="text-amber-400" title="Keluhan" items={[{ label: "Masalah", value: selectedIssueLabels.length > 0 ? selectedIssueLabels.join(", ") : "Tidak ada" }, ...(formData.keluhanDetail ? [{ label: "Detail", value: formData.keluhanDetail }] : [])]} />
 
+      {/* Sparepart Summary */}
+      {formData.selectedParts.length > 0 && (
+        <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 flex flex-col gap-2">
+          <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-violet-400 text-[18px]">build</span><h4 className="text-sm font-semibold text-white">Sparepart ({formData.selectedParts.length})</h4></div>
+          {formData.selectedParts.map(p => (
+            <div key={p.id} className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">{p.name} x{p.qty}</span>
+              <span className="text-white font-medium tabular-nums">Rp {new Intl.NumberFormat("id-ID").format(p.unitPrice * p.qty)}</span>
+            </div>
+          ))}
+          <div className="h-px bg-white/10 mt-1" />
+          <div className="flex items-center justify-between text-sm"><span className="text-slate-300 font-medium">Total Part</span><span className="text-violet-300 font-bold tabular-nums">Rp {new Intl.NumberFormat("id-ID").format(partsCost)}</span></div>
+        </div>
+      )}
+
       <div className="rounded-xl p-4 flex flex-col gap-2" style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04))", border: "1px solid rgba(99,102,241,0.15)" }}>
         <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-emerald-400 text-[18px]">payments</span><h4 className="text-sm font-semibold text-white">Biaya</h4></div>
-        <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Estimasi</span><span className="text-white font-semibold tabular-nums">Rp {formatCurrency(formData.estimatedCost)}</span></div>
-        {formData.dpAmount && (<div className="flex items-center justify-between text-sm"><span className="text-slate-400">DP</span><span className="text-emerald-400 font-semibold tabular-nums">Rp {formatCurrency(formData.dpAmount)}</span></div>)}
+        <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Estimasi Servis</span><span className="text-white font-semibold tabular-nums">Rp {formatCurrency(formData.estimatedCost)}</span></div>
+        {partsCost > 0 && (<div className="flex items-center justify-between text-sm"><span className="text-slate-400">Biaya Part</span><span className="text-violet-300 font-semibold tabular-nums">Rp {new Intl.NumberFormat("id-ID").format(partsCost)}</span></div>)}
+        {formData.dpAmount && (<div className="flex items-center justify-between text-sm"><span className="text-slate-400">DP</span><span className="text-emerald-400 font-semibold tabular-nums">- Rp {formatCurrency(formData.dpAmount)}</span></div>)}
+        <div className="h-px bg-white/10 my-1" />
+        <div className="flex items-center justify-between text-sm"><span className="text-white font-bold">Total</span><span className="text-white font-bold tabular-nums text-base">Rp {new Intl.NumberFormat("id-ID").format(Number(formData.estimatedCost || 0) + partsCost - Number(formData.dpAmount || 0))}</span></div>
         <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Estimasi Waktu</span><span className="text-white font-medium">{formData.estimatedDays} hari kerja</span></div>
         <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Garansi</span><span className="text-white font-medium">{formData.warrantyDays} hari</span></div>
       </div>
+
+      {formData.selectedParts.length > 0 && (
+        <div className="flex items-start gap-2 bg-violet-500/5 border border-violet-500/10 rounded-lg p-3">
+          <span className="material-symbols-outlined text-violet-400 text-[16px] mt-0.5">inventory_2</span>
+          <p className="text-xs text-violet-200/80 leading-relaxed font-medium">Stok sparepart yang dipilih akan otomatis dikurangi dari inventaris setelah tiket dibuat.</p>
+        </div>
+      )}
 
       <div className="flex items-start gap-2 bg-amber-500/5 border border-amber-500/10 rounded-lg p-3">
         <span className="material-symbols-outlined text-amber-400 text-[16px] mt-0.5">gavel</span>
         <p className="text-xs text-amber-200/80 leading-relaxed font-medium">Dengan membuat tiket ini, customer menyetujui estimasi biaya dan waktu pengerjaan. Biaya final dapat berubah setelah pengecekan oleh teknisi.</p>
       </div>
+    </section>
+  );
+}
+
+/* ==============================
+   STEP 2b: Sparepart Picker
+   ============================== */
+function Step2bSparepart({ spareparts, loading, selectedParts, addPart, updatePartQty, removePart, branchId, onRefresh }) {
+  const [search, setSearch] = useState("");
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickForm, setQuickForm] = useState({ name: "", sku: "", buyPrice: "", sellPrice: "", stock: "1" });
+  const [isSaving, setIsSaving] = useState(false);
+  const filtered = spareparts.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()));
+  const partsCost = selectedParts.reduce((sum, p) => sum + p.unitPrice * p.qty, 0);
+
+  const handleQuickAdd = async () => {
+    if (!quickForm.name || !quickForm.sku) return alert("Nama dan SKU wajib diisi!");
+    setIsSaving(true);
+    try {
+      const stockMap = {};
+      if (branchId && branchId !== "all") stockMap[branchId] = Number(quickForm.stock || 1);
+      const res = await addProduct(
+        { name: quickForm.name, sku: quickForm.sku.toUpperCase(), category: "Sparepart", purchasePrice: Number(quickForm.buyPrice || 0), retailPrice: Number(quickForm.sellPrice || 0) },
+        stockMap, []
+      );
+      if (res.success) {
+        alert(`Part "${quickForm.name}" berhasil ditambahkan ke inventaris!`);
+        setQuickForm({ name: "", sku: "", buyPrice: "", sellPrice: "", stock: "1" });
+        setShowQuickAdd(false);
+        if (onRefresh) onRefresh();
+      } else {
+        alert("Gagal: " + res.error);
+      }
+    } catch (err) { alert("Error: " + err.message); }
+    finally { setIsSaving(false); }
+  };
+
+  return (
+    <section className="glass-card p-4 flex flex-col gap-4 shadow-lg shadow-black/20">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="material-symbols-outlined text-violet-400 text-[20px]">build</span>
+        <h3 className="text-lg font-semibold text-white">Pilih Sparepart</h3>
+      </div>
+      <p className="text-sm text-slate-400 -mt-2">Pilih part yang digunakan untuk servis (opsional). Stok akan otomatis berkurang.</p>
+
+      {/* Search + Quick Add Toggle */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-white/30">search</span>
+          <input className="input-field pl-10" placeholder="Cari sparepart..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <button onClick={() => setShowQuickAdd(!showQuickAdd)} className={`px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all ${showQuickAdd ? "bg-violet-500/20 text-violet-300 border border-violet-500/30" : "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"}`}>
+          <span className="material-symbols-outlined text-[16px]">{showQuickAdd ? "close" : "add_circle"}</span>
+          {showQuickAdd ? "Tutup" : "Part Baru"}
+        </button>
+      </div>
+
+      {/* Quick Add Form */}
+      {showQuickAdd && (
+        <div className="rounded-xl p-4 bg-violet-500/5 border border-violet-500/15 flex flex-col gap-3 animate-fade-slide-up">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-violet-400 text-[18px]">add_box</span>
+            <h4 className="text-sm font-bold text-white">Tambah Part Baru ke Inventaris</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+              <label className="text-[10px] text-white/40 uppercase font-bold">Nama Part *</label>
+              <input className="input-field text-sm" placeholder="LCD Samsung A54 OEM" value={quickForm.name} onChange={e => setQuickForm({...quickForm, name: e.target.value})} />
+            </div>
+            <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+              <label className="text-[10px] text-white/40 uppercase font-bold">SKU / Kode *</label>
+              <input className="input-field text-sm font-mono uppercase" placeholder="SPC-LCD-SA54" value={quickForm.sku} onChange={e => setQuickForm({...quickForm, sku: e.target.value.toUpperCase()})} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-white/40 uppercase font-bold">Harga Beli (Modal)</label>
+              <input type="number" className="input-field text-sm" placeholder="0" value={quickForm.buyPrice} onChange={e => setQuickForm({...quickForm, buyPrice: e.target.value})} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-white/40 uppercase font-bold">Harga Jual (Ke Customer)</label>
+              <input type="number" className="input-field text-sm" placeholder="0" value={quickForm.sellPrice} onChange={e => setQuickForm({...quickForm, sellPrice: e.target.value})} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-white/40 uppercase font-bold">Stok Awal</label>
+              <input type="number" className="input-field text-sm text-center" min="1" value={quickForm.stock} onChange={e => setQuickForm({...quickForm, stock: e.target.value})} />
+            </div>
+            <div className="flex items-end">
+              <button onClick={handleQuickAdd} disabled={isSaving || !quickForm.name || !quickForm.sku} className="btn-gradient w-full py-2 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40">
+                <span className="material-symbols-outlined text-[16px]">{isSaving ? "hourglass_top" : "save"}</span>
+                {isSaving ? "Menyimpan..." : "Simpan & Tambah"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Parts List */}
+      <div className="max-h-[240px] overflow-y-auto flex flex-col gap-1.5 pr-1">
+        {loading ? (
+          <div className="py-8 text-center text-white/30 text-sm">Memuat sparepart...</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-8 text-center text-white/30 text-sm">Tidak ada sparepart ditemukan</div>
+        ) : filtered.map(part => {
+          const isAdded = selectedParts.some(p => p.id === part.id);
+          return (
+            <button key={part.id} onClick={() => !isAdded && part.totalStock > 0 && addPart(part)}
+              disabled={isAdded || part.totalStock === 0}
+              className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${isAdded ? "bg-violet-500/15 border-violet-500/30" : part.totalStock === 0 ? "bg-white/[0.01] border-white/[0.04] opacity-40" : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]"}`}>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-medium text-white">{part.name}</span>
+                <span className="text-[10px] text-white/30 font-mono">{part.sku} · <span className="text-emerald-400/70">Rp {new Intl.NumberFormat("id-ID").format(part.retailPrice || part.purchasePrice)}</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${part.totalStock > 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
+                  Stok: {part.totalStock}
+                </span>
+                {isAdded && <span className="material-symbols-outlined text-violet-400 text-[16px]">check_circle</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected Parts Cart */}
+      {selectedParts.length > 0 && (
+        <div className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "linear-gradient(135deg, rgba(139,92,246,0.08), rgba(99,102,241,0.04))", border: "1px solid rgba(139,92,246,0.15)" }}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-violet-400 text-[18px]">shopping_cart</span>
+            <h4 className="text-sm font-semibold text-white">Part Digunakan ({selectedParts.length})</h4>
+          </div>
+          {selectedParts.map(p => (
+            <div key={p.id} className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-white truncate">{p.name}</p>
+                <p className="text-[10px] text-white/30">@ Rp {new Intl.NumberFormat("id-ID").format(p.unitPrice)}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => updatePartQty(p.id, p.qty - 1)} className="w-6 h-6 rounded bg-white/10 text-white/60 flex items-center justify-center text-sm hover:bg-white/20">−</button>
+                <span className="text-xs text-white font-bold w-6 text-center tabular-nums">{p.qty}</span>
+                <button onClick={() => updatePartQty(p.id, p.qty + 1)} className="w-6 h-6 rounded bg-white/10 text-white/60 flex items-center justify-center text-sm hover:bg-white/20">+</button>
+                <button onClick={() => removePart(p.id)} className="ml-1 text-red-400/60 hover:text-red-400"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+              </div>
+            </div>
+          ))}
+          <div className="h-px bg-white/10 mt-1" />
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-400">Total Part</span>
+            <span className="text-violet-300 font-bold tabular-nums">Rp {new Intl.NumberFormat("id-ID").format(partsCost)}</span>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

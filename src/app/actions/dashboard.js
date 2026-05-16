@@ -109,6 +109,44 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       totalSalary = await getTotalSalaries(startDate, endDate);
     }
 
+    // 7b. Service Revenue & Profit (Owner/Manager)
+    let serviceRevenue = 0;
+    let servicePartsCost = 0;
+    let serviceProfit = 0;
+    if (isOwner || isManager) {
+      const svcQuery = supabase
+        .from("service_tickets")
+        .select("id, estimated_cost, parts_cost, total_cost, status")
+        .eq("status", "done");
+      if (targetBranchId) svcQuery.eq("branch_id", targetBranchId);
+      if (startDate) svcQuery.gte("created_at", startDate);
+      if (endDate) svcQuery.lte("created_at", endDate + "T23:59:59");
+      const { data: doneTickets } = await svcQuery;
+
+      if (doneTickets && doneTickets.length > 0) {
+        // Get parts purchase prices for profit calculation
+        const ticketIds = doneTickets.map(t => t.id);
+        const { data: usedParts } = await supabase
+          .from("service_ticket_parts")
+          .select("ticket_id, quantity, unit_price, product_id, products(purchase_price)")
+          .in("ticket_id", ticketIds);
+
+        doneTickets.forEach(t => {
+          const svcFee = Number(t.estimated_cost || 0); // jasa servis
+          const partsCharged = Number(t.parts_cost || 0); // biaya part ke customer
+          serviceRevenue += svcFee + partsCharged;
+        });
+
+        // Calculate actual purchase cost of parts used
+        (usedParts || []).forEach(p => {
+          const purchasePrice = Number(p.products?.purchase_price || p.unit_price || 0);
+          servicePartsCost += purchasePrice * Number(p.quantity || 1);
+        });
+
+        serviceProfit = serviceRevenue - servicePartsCost;
+      }
+    }
+
     const mappedAlerts = (serviceAlerts || []).map(s => ({
       id: s.id,
       customer: s.customer_name,
@@ -274,13 +312,16 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
         totalSalary: totalSalary,
         inventoryValue: inventoryValue,
         assetValue: assetValue,
-        myKasbon: myKasbonBalance
+        myKasbon: myKasbonBalance,
+        serviceRevenue,
+        servicePartsCost,
+        serviceProfit,
       },
       recentTransactions: recentTransactions || [],
       sales7Days,
       revenueByBranch,
       serviceAlerts: mappedAlerts,
-      attendanceIssues, // Add this
+      attendanceIssues,
       userRole: profile?.role
     };
   } catch (error) {
