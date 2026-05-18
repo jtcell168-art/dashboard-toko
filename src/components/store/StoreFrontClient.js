@@ -199,20 +199,57 @@ export default function StoreFrontClient({ products }) {
             </div>
             
             <div className="relative animate-fade-slide-up" style={{ animationDelay: '100ms' }}>
-              <div className="relative z-10 glass-card p-6 aspect-square max-h-[500px] flex items-center justify-center transform rotate-2 hover:rotate-0 transition-transform duration-500">
-                <img 
-                  src={heroProduct?.image || "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?q=80&w=800&auto=format&fit=crop"} 
-                  alt={heroProduct?.name || "Flagship Phone"} 
-                  className="w-full h-full object-cover rounded-xl shadow-2xl"
-                />
-                <div className="absolute -bottom-6 -left-6 glass-card p-4 flex items-center gap-4 animate-slide-up">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                    <span className="material-symbols-outlined">stars</span>
+              <div className="relative z-10 glass-card p-5 w-full max-w-[440px] mx-auto flex flex-col justify-between hover:border-indigo-500/30 transition-all duration-500 shadow-2xl hover:shadow-indigo-500/10 group">
+                {/* Top Badge */}
+                <div className="flex items-center justify-between mb-4">
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest">
+                    Rekomendasi Hari Ini
+                  </span>
+                  <span className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/60">
+                    <span className="material-symbols-outlined text-[16px]">stars</span>
+                  </span>
+                </div>
+
+                {/* Product Image Container */}
+                <div className="h-64 flex items-center justify-center bg-white/[0.02] rounded-2xl p-4 overflow-hidden relative">
+                  <img 
+                    src={heroProduct?.image || "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?q=80&w=800&auto=format&fit=crop"} 
+                    alt={heroProduct?.name || "Flagship Phone"} 
+                    className="max-h-full max-w-full object-contain transform group-hover:scale-105 transition-transform duration-500 drop-shadow-2xl"
+                  />
+                </div>
+
+                {/* Bottom Product Info & CTA Panel */}
+                <div className="mt-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 backdrop-blur-md space-y-3">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1">
+                      <h3 className="text-base font-bold text-white leading-tight line-clamp-1">
+                        {heroProduct?.name || "Flagship Smartphone"}
+                      </h3>
+                      <p className="text-xs text-white/40 mt-1 line-clamp-1">
+                        {heroProduct?.description || "Garansi resmi, kualitas terbaik di kelasnya."}
+                      </p>
+                    </div>
+                    {heroProduct?.price && (
+                      <div className="text-right shrink-0">
+                        <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider block">Harga Spesial</span>
+                        <span className="text-base font-extrabold text-white">
+                          Rp {Number(heroProduct.price).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-white leading-tight pr-2">{heroProduct?.name || "100% Original"}</p>
-                    <p className="text-[10px] text-white/60 uppercase tracking-widest font-bold mt-0.5">Produk Pilihan Hari Ini</p>
-                  </div>
+                  <a 
+                    href={`https://wa.me/6281246050589?text=Halo%20JTCell,%20saya%20tertarik%20dengan%20produk%20pilihan%20hari%20ini:%20${encodeURIComponent(heroProduct?.name || '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-sm text-center flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
+                    {heroProduct?.name?.toUpperCase().includes('PRE ORDER') || heroProduct?.name?.toUpperCase().includes('PRE-ORDER') 
+                      ? 'Pre-Order via WhatsApp' 
+                      : 'Beli Sekarang via WhatsApp'}
+                  </a>
                 </div>
               </div>
             </div>
