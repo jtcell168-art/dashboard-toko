@@ -498,7 +498,7 @@ export default function StoreFrontClient({ products }) {
                   id: "Ruteng",
                   name: "JTCell Ruteng",
                   desc: "Manggarai, Flores Barat",
-                  addr: "Jl. Komodo, Ruteng, NTT",
+                  addr: "Jl. Slamet Riyadi, Watu, Kec. Langke Rembong, Kabupaten Manggarai, Nusa Tenggara Tim. 86511",
                   phone: "0812-4605-0589",
                   maps: "https://maps.app.goo.gl/ztjXQtqSyhY7ZTev6"
                 },
@@ -506,7 +506,7 @@ export default function StoreFrontClient({ products }) {
                   id: "Riung",
                   name: "JTCell Riung",
                   desc: "Ngada, Flores Utara",
-                  addr: "Kec. Riung, Kabupaten Ngada, NTT",
+                  addr: "Pasar Marunggela, Kec. Riung, Kabupaten Ngada, Nusa Tenggara Tim. 86462",
                   phone: "0812-3963-7775",
                   maps: "https://maps.app.goo.gl/nRZo1mECjfj3okHa7"
                 },
@@ -514,7 +514,7 @@ export default function StoreFrontClient({ products }) {
                   id: "Larantuka",
                   name: "JTCell Larantuka",
                   desc: "Flores Timur, Ujung Timur Flores",
-                  addr: "Kec. Larantuka, Flores Timur, NTT",
+                  addr: "Jl. Niaga, Kompleks Pertoko, Larantuka, Kec. Larantuka, Kabupaten Flores Timur, Nusa Tenggara Tim. 86213",
                   phone: "0812-4628-2157",
                   maps: "https://maps.app.goo.gl/Xm1JEEvaUFSUJx64A"
                 }
@@ -570,20 +570,20 @@ export default function StoreFrontClient({ products }) {
               })}
             </div>
 
-            {/* Right Side: Glowing Interactive Flores Map */}
+            {/* Right Side: Detailed Interactive Flores Map */}
             <div className="lg:col-span-7">
               <div className="relative aspect-[3/2] w-full rounded-3xl bg-[#090D18] border border-white/5 p-8 flex items-center justify-center overflow-hidden shadow-2xl hover:border-indigo-500/20 transition-all group">
                 
                 {/* Subtle Grid Pattern Overlay */}
-                <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-25" />
+                <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-25 pointer-events-none" />
                 
-                {/* Flores Glowing Map Image */}
+                {/* Flores Clean Silhouetted Map (Inverted to Glowing Futuristic Tech Outline) */}
                 <img
                   src="/peta-flores.png"
                   alt="Peta Flores"
                   className="w-full h-auto max-h-[85%] object-contain select-none transition-all duration-700"
                   style={{
-                    filter: "invert(1) sepia(1) saturate(10000%) hue-rotate(220deg) brightness(1.2) drop-shadow(0 0 20px rgba(99,102,241,0.65))",
+                    filter: "invert(1) sepia(1) saturate(3000%) hue-rotate(185deg) brightness(1.4) drop-shadow(0 0 12px rgba(6,182,212,0.95)) drop-shadow(0 0 30px rgba(59,130,246,0.85)) drop-shadow(0 0 50px rgba(37,99,235,0.45))",
                     mixBlendMode: "screen"
                   }}
                 />
@@ -592,23 +592,25 @@ export default function StoreFrontClient({ products }) {
                 
                 {/* Pin 1: Ruteng */}
                 <div 
-                  className="absolute cursor-pointer group/pin" 
-                  style={{ left: "20%", top: "54%" }}
+                  className="absolute cursor-pointer group/pin z-20" 
+                  style={{ left: "20.5%", top: "56%" }}
                   onClick={() => setActiveBranch("Ruteng")}
                 >
-                  <div className={`relative flex items-center justify-center`}>
-                    <span className={`absolute inline-flex h-10 w-10 rounded-full bg-indigo-400 opacity-75 animate-ping duration-1000 ${
+                  <div className="relative flex items-center justify-center">
+                    <span className={`absolute inline-flex h-8 w-8 rounded-full bg-rose-500 opacity-60 animate-ping duration-1000 ${
                       activeBranch === "Ruteng" ? "block" : "hidden group-hover/pin:block"
                     }`} />
-                    <div className={`w-4 h-4 rounded-full border border-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(99,102,241,1)] ${
-                      activeBranch === "Ruteng" ? 'bg-indigo-500 scale-125' : 'bg-zinc-600 scale-100 hover:scale-125'
+                    <div className={`transition-all duration-300 ${
+                      activeBranch === "Ruteng" ? 'scale-125 -translate-y-1.5' : 'scale-100 group-hover/pin:scale-110 -translate-y-0.5'
                     }`}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      <span className="material-symbols-outlined text-rose-600 text-3xl drop-shadow-[0_2px_8px_rgba(225,29,72,0.6)]">
+                        location_on
+                      </span>
                     </div>
                   </div>
                   
                   {/* Pin label card */}
-                  <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/90 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider backdrop-blur-md text-white whitespace-nowrap shadow-2xl transition-all duration-300 ${
+                  <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 bg-slate-950/90 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider backdrop-blur-md text-white whitespace-nowrap shadow-2xl transition-all duration-300 z-30 ${
                     activeBranch === "Ruteng" ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-2 pointer-events-none group-hover/pin:opacity-100 group-hover/pin:scale-100 group-hover/pin:translate-y-0"
                   }`}>
                     📍 Ruteng (Manggarai)
@@ -617,23 +619,25 @@ export default function StoreFrontClient({ products }) {
 
                 {/* Pin 2: Riung */}
                 <div 
-                  className="absolute cursor-pointer group/pin" 
-                  style={{ left: "44%", top: "40%" }}
+                  className="absolute cursor-pointer group/pin z-20" 
+                  style={{ left: "33.8%", top: "49%" }}
                   onClick={() => setActiveBranch("Riung")}
                 >
-                  <div className={`relative flex items-center justify-center`}>
-                    <span className={`absolute inline-flex h-10 w-10 rounded-full bg-indigo-400 opacity-75 animate-ping duration-1000 ${
+                  <div className="relative flex items-center justify-center">
+                    <span className={`absolute inline-flex h-8 w-8 rounded-full bg-rose-500 opacity-60 animate-ping duration-1000 ${
                       activeBranch === "Riung" ? "block" : "hidden group-hover/pin:block"
                     }`} />
-                    <div className={`w-4 h-4 rounded-full border border-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(99,102,241,1)] ${
-                      activeBranch === "Riung" ? 'bg-indigo-500 scale-125' : 'bg-zinc-600 scale-100 hover:scale-125'
+                    <div className={`transition-all duration-300 ${
+                      activeBranch === "Riung" ? 'scale-125 -translate-y-1.5' : 'scale-100 group-hover/pin:scale-110 -translate-y-0.5'
                     }`}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      <span className="material-symbols-outlined text-rose-600 text-3xl drop-shadow-[0_2px_8px_rgba(225,29,72,0.6)]">
+                        location_on
+                      </span>
                     </div>
                   </div>
                   
                   {/* Pin label card */}
-                  <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/90 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider backdrop-blur-md text-white whitespace-nowrap shadow-2xl transition-all duration-300 ${
+                  <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 bg-slate-950/90 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider backdrop-blur-md text-white whitespace-nowrap shadow-2xl transition-all duration-300 z-30 ${
                     activeBranch === "Riung" ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-2 pointer-events-none group-hover/pin:opacity-100 group-hover/pin:scale-100 group-hover/pin:translate-y-0"
                   }`}>
                     📍 Riung (Ngada)
@@ -642,23 +646,25 @@ export default function StoreFrontClient({ products }) {
 
                 {/* Pin 3: Larantuka */}
                 <div 
-                  className="absolute cursor-pointer group/pin" 
-                  style={{ left: "86%", top: "42%" }}
+                  className="absolute cursor-pointer group/pin z-20" 
+                  style={{ left: "80.5%", top: "42.5%" }}
                   onClick={() => setActiveBranch("Larantuka")}
                 >
-                  <div className={`relative flex items-center justify-center`}>
-                    <span className={`absolute inline-flex h-10 w-10 rounded-full bg-indigo-400 opacity-75 animate-ping duration-1000 ${
+                  <div className="relative flex items-center justify-center">
+                    <span className={`absolute inline-flex h-8 w-8 rounded-full bg-rose-500 opacity-60 animate-ping duration-1000 ${
                       activeBranch === "Larantuka" ? "block" : "hidden group-hover/pin:block"
                     }`} />
-                    <div className={`w-4 h-4 rounded-full border border-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(99,102,241,1)] ${
-                      activeBranch === "Larantuka" ? 'bg-indigo-500 scale-125' : 'bg-zinc-600 scale-100 hover:scale-125'
+                    <div className={`transition-all duration-300 ${
+                      activeBranch === "Larantuka" ? 'scale-125 -translate-y-1.5' : 'scale-100 group-hover/pin:scale-110 -translate-y-0.5'
                     }`}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      <span className="material-symbols-outlined text-rose-600 text-3xl drop-shadow-[0_2px_8px_rgba(225,29,72,0.6)]">
+                        location_on
+                      </span>
                     </div>
                   </div>
                   
                   {/* Pin label card */}
-                  <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/90 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider backdrop-blur-md text-white whitespace-nowrap shadow-2xl transition-all duration-300 ${
+                  <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 bg-slate-950/90 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider backdrop-blur-md text-white whitespace-nowrap shadow-2xl transition-all duration-300 z-30 ${
                     activeBranch === "Larantuka" ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-2 pointer-events-none group-hover/pin:opacity-100 group-hover/pin:scale-100 group-hover/pin:translate-y-0"
                   }`}>
                     📍 Larantuka (Flores Timur)
