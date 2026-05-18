@@ -492,14 +492,14 @@ export default function StoreFrontClient({ products }) {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Left Side: Branch Selector Cards */}
-            <div className="lg:col-span-5 space-y-4">
+             <div className="lg:col-span-5 space-y-4">
               {[
                 {
                   id: "Ruteng",
                   name: "JTCell Ruteng",
                   desc: "Manggarai, Flores Barat",
                   addr: "Jl. Slamet Riyadi, Watu, Kec. Langke Rembong, Kabupaten Manggarai, Nusa Tenggara Tim. 86511",
-                  phone: "0812-4605-0589",
+                  phone: "+62 812-4605-0589",
                   maps: "https://maps.app.goo.gl/ztjXQtqSyhY7ZTev6"
                 },
                 {
@@ -507,7 +507,7 @@ export default function StoreFrontClient({ products }) {
                   name: "JTCell Riung",
                   desc: "Ngada, Flores Utara",
                   addr: "Pasar Marunggela, Kec. Riung, Kabupaten Ngada, Nusa Tenggara Tim. 86462",
-                  phone: "0812-3963-7775",
+                  phone: "+62 812-3963-7775",
                   maps: "https://maps.app.goo.gl/nRZo1mECjfj3okHa7"
                 },
                 {
@@ -515,7 +515,7 @@ export default function StoreFrontClient({ products }) {
                   name: "JTCell Larantuka",
                   desc: "Flores Timur, Ujung Timur Flores",
                   addr: "Jl. Niaga, Kompleks Pertoko, Larantuka, Kec. Larantuka, Kabupaten Flores Timur, Nusa Tenggara Tim. 86213",
-                  phone: "0812-4628-2157",
+                  phone: "+62 812-4628-2157",
                   maps: "https://maps.app.goo.gl/Xm1JEEvaUFSUJx64A"
                 }
               ].map(branch => {
@@ -545,7 +545,13 @@ export default function StoreFrontClient({ products }) {
                     
                     <div className="flex flex-col gap-2 shrink-0">
                       <a 
-                        href={`https://wa.me/${branch.phone.replace(/[^0-9]/g, '')}`} 
+                        href={`https://wa.me/${(() => {
+                          let clean = branch.phone.replace(/[^0-9]/g, '');
+                          if (clean.startsWith('0')) {
+                            clean = '62' + clean.slice(1);
+                          }
+                          return clean;
+                        })()}`} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         onClick={(e) => e.stopPropagation()}
