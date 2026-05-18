@@ -93,6 +93,10 @@ body {
   from { opacity: 0; transform: translateX(20px); }
   to   { opacity: 1; transform: translateX(0); }
 }
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
@@ -109,6 +113,7 @@ body {
 .animate-fade-slide-up { animation: fadeSlideUp 0.4s ease-out forwards; }
 .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
 .animate-slide-in-right { animation: slideInRight 0.3s ease-out forwards; }
+.animate-slide-in-left { animation: slideInLeft 0.3s ease-out forwards; }
 .animate-scale-in { animation: scaleIn 0.2s ease-out forwards; }
 .animate-count-up { animation: countUp 0.5s ease-out forwards; }
 .animate-slide-down { animation: slideDown 0.3s ease-out forwards; }

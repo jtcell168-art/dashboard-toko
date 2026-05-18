@@ -15,9 +15,20 @@ export default function StoreFrontClient({ products }) {
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [activeCategory, setActiveCategory] = useState("Semua");
   const [helpModal, setHelpModal] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const filteredProducts = products.filter(p => {
     const isSparepart = p.category.toLowerCase().includes("sparepart") || p.category.toLowerCase().includes("servis") || p.category.toLowerCase().includes("lcd") || p.category.toLowerCase().includes("part");
+    
+    // Search query filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = p.name.toLowerCase().includes(query) || p.category.toLowerCase().includes(query) || (p.description && p.description.toLowerCase().includes(query));
+      if (!matchesSearch) return false;
+    }
+
     if (activeCategory === "Semua") return !isSparepart; // Hide spareparts from home page to keep it clean
     if (activeCategory === "Smartphone") return p.category === "HP";
     if (activeCategory === "Aksesoris") return p.category.toLowerCase().includes("aksesori");
@@ -83,8 +94,8 @@ export default function StoreFrontClient({ products }) {
 
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-50 bg-[#0A0E1A]/80 backdrop-blur-md border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
               <span className="material-symbols-outlined text-white">devices</span>
             </div>
@@ -93,17 +104,47 @@ export default function StoreFrontClient({ products }) {
             </span>
           </div>
 
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
-            <button onClick={() => { setActiveCategory("Semua"); window.location.href = "#"; }} className={`${activeCategory === "Semua" ? "text-indigo-400 font-bold" : "text-white hover:text-indigo-400"} transition-colors`}>Home</button>
-            <button onClick={() => { setActiveCategory("Smartphone"); window.location.href = "#products"; }} className={`${activeCategory === "Smartphone" ? "text-indigo-400 font-bold" : "hover:text-white"} transition-colors`}>Smartphone</button>
-            <button onClick={() => { setActiveCategory("Aksesoris"); window.location.href = "#products"; }} className={`${activeCategory === "Aksesoris" ? "text-indigo-400 font-bold" : "hover:text-white"} transition-colors`}>Aksesoris</button>
-            <button onClick={() => { setActiveCategory("Servis HP"); window.location.href = "#products"; }} className={`${activeCategory === "Servis HP" ? "text-indigo-400 font-bold" : "hover:text-white"} transition-colors`}>Servis HP</button>
-          </div>
+          {isSearchOpen ? (
+            <div className="flex-1 max-w-lg relative animate-fade-in">
+              <input 
+                type="text" 
+                placeholder="Cari smartphone, aksesoris, atau sparepart..." 
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  // Auto scroll to products so user sees the results
+                  const el = document.getElementById("products");
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="w-full bg-white/5 border border-white/10 focus:border-indigo-500/50 rounded-full py-2 px-5 pl-12 text-sm text-white placeholder-white/40 focus:outline-none transition-all"
+                autoFocus
+              />
+              <span className="material-symbols-outlined absolute left-4 top-2 text-white/40">search</span>
+              <button 
+                onClick={() => { setIsSearchOpen(false); setSearchQuery(""); }} 
+                className="absolute right-4 top-2.5 text-white/40 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+          ) : (
+            <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
+              <button onClick={() => { setActiveCategory("Semua"); window.location.href = "#"; }} className={`${activeCategory === "Semua" ? "text-indigo-400 font-bold" : "text-white hover:text-indigo-400"} transition-colors cursor-pointer`}>Home</button>
+              <button onClick={() => { setActiveCategory("Smartphone"); window.location.href = "#products"; }} className={`${activeCategory === "Smartphone" ? "text-indigo-400 font-bold" : "hover:text-white"} transition-colors cursor-pointer`}>Smartphone</button>
+              <button onClick={() => { setActiveCategory("Aksesoris"); window.location.href = "#products"; }} className={`${activeCategory === "Aksesoris" ? "text-indigo-400 font-bold" : "hover:text-white"} transition-colors cursor-pointer`}>Aksesoris</button>
+              <button onClick={() => { setActiveCategory("Servis HP"); window.location.href = "#products"; }} className={`${activeCategory === "Servis HP" ? "text-indigo-400 font-bold" : "hover:text-white"} transition-colors cursor-pointer`}>Servis HP</button>
+            </div>
+          )}
 
-          <div className="flex items-center gap-4">
-            <button className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
-              <span className="material-symbols-outlined text-[20px]">search</span>
-            </button>
+          <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+            {!isSearchOpen && (
+              <button 
+                onClick={() => setIsSearchOpen(true)}
+                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px]">search</span>
+              </button>
+            )}
             <button 
               onClick={() => setIsCartOpen(true)}
               className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors relative"
@@ -119,6 +160,14 @@ export default function StoreFrontClient({ products }) {
               <span>Masuk Sistem</span>
               <span className="material-symbols-outlined text-[18px]">login</span>
             </Link>
+            
+            {/* Hamburger Button for Mobile */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">menu</span>
+            </button>
           </div>
         </div>
       </nav>
@@ -174,8 +223,12 @@ export default function StoreFrontClient({ products }) {
         <div id="products" className="max-w-7xl mx-auto px-6 mt-32">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <h2 className="text-3xl font-bold mb-2">{activeCategory === "Servis HP" ? "Sparepart & Servis" : "Produk Pilihan"}</h2>
-              <p className="text-white/60">{activeCategory === "Servis HP" ? "Suku cadang berkualitas untuk perbaikan gadget Anda." : "Gadget terbaik dengan harga spesial untuk Anda."}</p>
+              <h2 className="text-3xl font-bold mb-2">
+                {searchQuery ? `Hasil Pencarian: "${searchQuery}"` : activeCategory === "Servis HP" ? "Sparepart & Servis" : "Produk Pilihan"}
+              </h2>
+              <p className="text-white/60">
+                {searchQuery ? `Menampilkan ${filteredProducts.length} produk yang cocok.` : activeCategory === "Servis HP" ? "Suku cadang berkualitas untuk perbaikan gadget Anda." : "Gadget terbaik dengan harga spesial untuk Anda."}
+              </p>
             </div>
           </div>
 
@@ -585,6 +638,83 @@ export default function StoreFrontClient({ products }) {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE MENU DRAWER */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[9999] flex md:hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          
+          {/* Sidebar Drawer */}
+          <div className="relative w-72 bg-[#0F172A] h-full flex flex-col shadow-2xl animate-slide-in-left border-r border-white/5">
+            <div className="flex items-center justify-between p-6 border-b border-white/5 bg-white/[0.02]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-sm">devices</span>
+                </div>
+                <span className="text-lg font-bold">JTCell</span>
+              </div>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="flex-1 py-6 px-4 flex flex-col gap-6">
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider px-3 mb-1">Navigasi</p>
+                <button 
+                  onClick={() => { setActiveCategory("Semua"); setIsMobileMenuOpen(false); window.location.href = "#"; }} 
+                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-colors ${activeCategory === "Semua" ? "bg-indigo-500/10 text-indigo-400 font-bold" : "text-white/70 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Home
+                </button>
+                <button 
+                  onClick={() => { setActiveCategory("Smartphone"); setIsMobileMenuOpen(false); window.location.href = "#products"; }} 
+                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-colors ${activeCategory === "Smartphone" ? "bg-indigo-500/10 text-indigo-400 font-bold" : "text-white/70 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Smartphone
+                </button>
+                <button 
+                  onClick={() => { setActiveCategory("Aksesoris"); setIsMobileMenuOpen(false); window.location.href = "#products"; }} 
+                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-colors ${activeCategory === "Aksesoris" ? "bg-indigo-500/10 text-indigo-400 font-bold" : "text-white/70 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Aksesoris
+                </button>
+                <button 
+                  onClick={() => { setActiveCategory("Servis HP"); setIsMobileMenuOpen(false); window.location.href = "#products"; }} 
+                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-colors ${activeCategory === "Servis HP" ? "bg-indigo-500/10 text-indigo-400 font-bold" : "text-white/70 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Servis HP
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider px-3 mb-1">Bantuan</p>
+                <button onClick={() => { setHelpModal('cara-belanja'); setIsMobileMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white transition-colors">Cara Belanja</button>
+                <button onClick={() => { setHelpModal('pengiriman'); setIsMobileMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white transition-colors">Pengiriman</button>
+                <button onClick={() => { setHelpModal('klaim-garansi'); setIsMobileMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white transition-colors">Klaim Garansi</button>
+              </div>
+
+              <div className="mt-auto border-t border-white/5 pt-6 flex flex-col gap-2">
+                <Link 
+                  href="/login" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full flex items-center justify-center gap-2 btn-gradient py-3 text-sm rounded-xl font-bold shadow-lg shadow-indigo-500/20"
+                >
+                  <span>Masuk Sistem</span>
+                  <span className="material-symbols-outlined text-[18px]">login</span>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
