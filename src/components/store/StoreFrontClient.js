@@ -18,6 +18,7 @@ export default function StoreFrontClient({ products }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [heroActiveTab, setHeroActiveTab] = useState("preorder");
 
   const filteredProducts = products.filter(p => {
     const isSparepart = p.category.toLowerCase().includes("sparepart") || p.category.toLowerCase().includes("servis") || p.category.toLowerCase().includes("lcd") || p.category.toLowerCase().includes("part");
@@ -84,7 +85,9 @@ export default function StoreFrontClient({ products }) {
     }
   };
 
-  const heroProduct = products.find(p => p.isFeatured) || products.find(p => p.image && !p.image.includes('ui-avatars')) || products[0];
+  const preOrderProduct = products.find(p => p.name.toUpperCase().includes('PRE ORDER') || p.name.toUpperCase().includes('PRE-ORDER')) || products.find(p => p.isFeatured) || products[0];
+  const discountProduct = products.find(p => (p.name.toUpperCase().includes('PROMO') || p.name.toUpperCase().includes('DISCOUNT') || p.name.toUpperCase().includes('SALE') || p.name.toUpperCase().includes('CUCI GUDANG') || p.name.toUpperCase().includes('CLEARANCE')) && p.id !== preOrderProduct?.id) || products.find(p => p.id !== preOrderProduct?.id && p.image && !p.image.includes('ui-avatars')) || products[1];
+  const activeHeroProduct = heroActiveTab === "preorder" ? preOrderProduct : discountProduct;
 
   return (
     <div className="min-h-screen bg-[#0A0E1A] text-white overflow-hidden relative">
@@ -200,23 +203,65 @@ export default function StoreFrontClient({ products }) {
             
             <div className="relative animate-fade-slide-up" style={{ animationDelay: '100ms' }}>
               <div className="relative z-10 glass-card p-5 w-full max-w-[440px] mx-auto flex flex-col justify-between hover:border-indigo-500/30 transition-all duration-500 shadow-2xl hover:shadow-indigo-500/10 group">
-                {/* Top Badge */}
+                
+                {/* Dynamic Tab Selector */}
+                <div className="flex p-1 bg-white/5 rounded-xl border border-white/5 mb-4">
+                  <button 
+                    onClick={() => setHeroActiveTab("preorder")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      heroActiveTab === "preorder" 
+                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">local_fire_department</span>
+                    Pre-Order HP
+                  </button>
+                  <button 
+                    onClick={() => setHeroActiveTab("discount")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      heroActiveTab === "discount" 
+                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' 
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">sell</span>
+                    Discount HP
+                  </button>
+                </div>
+
+                {/* Top Badge & Status Icon */}
                 <div className="flex items-center justify-between mb-4">
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest">
-                    Rekomendasi Hari Ini
-                  </span>
-                  <span className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/60">
-                    <span className="material-symbols-outlined text-[16px]">stars</span>
+                  {heroActiveTab === "preorder" ? (
+                    <span className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-widest">
+                      Pre-Order Eksklusif
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">
+                      Promo / Discount HP
+                    </span>
+                  )}
+                  <span className={`w-8 h-8 rounded-full bg-white/5 flex items-center justify-center ${heroActiveTab === "preorder" ? 'text-indigo-400' : 'text-rose-400'}`}>
+                    <span className="material-symbols-outlined text-[16px]">
+                      {heroActiveTab === "preorder" ? 'local_fire_department' : 'campaign'}
+                    </span>
                   </span>
                 </div>
 
                 {/* Product Image Container */}
                 <div className="h-64 flex items-center justify-center bg-white/[0.02] rounded-2xl p-4 overflow-hidden relative">
-                  <img 
-                    src={heroProduct?.image || "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?q=80&w=800&auto=format&fit=crop"} 
-                    alt={heroProduct?.name || "Flagship Phone"} 
-                    className="max-h-full max-w-full object-contain transform group-hover:scale-105 transition-transform duration-500 drop-shadow-2xl"
-                  />
+                  {activeHeroProduct?.image ? (
+                    <img 
+                      src={activeHeroProduct.image} 
+                      alt={activeHeroProduct.name} 
+                      className="max-h-full max-w-full object-contain transform group-hover:scale-105 transition-transform duration-500 drop-shadow-2xl"
+                    />
+                  ) : (
+                    <div className="text-white/20 flex flex-col items-center">
+                      <span className="material-symbols-outlined text-5xl">smartphone</span>
+                      <span className="text-[10px] mt-2">No Image</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom Product Info & CTA Panel */}
@@ -224,31 +269,35 @@ export default function StoreFrontClient({ products }) {
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex-1">
                       <h3 className="text-base font-bold text-white leading-tight line-clamp-1">
-                        {heroProduct?.name || "Flagship Smartphone"}
+                        {activeHeroProduct?.name || "Flagship Smartphone"}
                       </h3>
                       <p className="text-xs text-white/40 mt-1 line-clamp-1">
-                        {heroProduct?.description || "Garansi resmi, kualitas terbaik di kelasnya."}
+                        {activeHeroProduct?.description || "Garansi resmi, kualitas terbaik di kelasnya."}
                       </p>
                     </div>
-                    {heroProduct?.price && (
+                    {activeHeroProduct?.price && (
                       <div className="text-right shrink-0">
                         <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider block">Harga Spesial</span>
                         <span className="text-base font-extrabold text-white">
-                          Rp {Number(heroProduct.price).toLocaleString('id-ID')}
+                          Rp {Number(activeHeroProduct.price).toLocaleString('id-ID')}
                         </span>
                       </div>
                     )}
                   </div>
                   <a 
-                    href={`https://wa.me/6281246050589?text=Halo%20JTCell,%20saya%20tertarik%20dengan%20produk%20pilihan%20hari%20ini:%20${encodeURIComponent(heroProduct?.name || '')}`}
+                    href={`https://wa.me/6281246050589?text=Halo%20JTCell,%20saya%20tertarik%20dengan%20${heroActiveTab === "preorder" ? 'Pre-Order' : 'Promo%20Discount'}%20untuk%20produk:%20${encodeURIComponent(activeHeroProduct?.name || '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-sm text-center flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+                    className={`w-full py-3 rounded-xl text-white font-bold text-sm text-center flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg ${
+                      heroActiveTab === "preorder" 
+                        ? 'bg-indigo-500 hover:bg-indigo-400 shadow-indigo-500/20' 
+                        : 'bg-rose-500 hover:bg-rose-400 shadow-rose-500/20'
+                    }`}
                   >
-                    <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
-                    {heroProduct?.name?.toUpperCase().includes('PRE ORDER') || heroProduct?.name?.toUpperCase().includes('PRE-ORDER') 
-                      ? 'Pre-Order via WhatsApp' 
-                      : 'Beli Sekarang via WhatsApp'}
+                    <span className="material-symbols-outlined text-[18px]">
+                      {heroActiveTab === "preorder" ? 'shopping_bag' : 'local_mall'}
+                    </span>
+                    {heroActiveTab === "preorder" ? 'Pre-Order via WhatsApp' : 'Ambil Discount via WhatsApp'}
                   </a>
                 </div>
               </div>
