@@ -22,7 +22,11 @@ export async function getInventory(branchId = "all") {
           branch_id,
           quantity,
           branches ( name )
-        )
+        ),
+        is_online,
+        is_featured,
+        image_url,
+        description
       `)
       .order("created_at", { ascending: false });
 
@@ -33,7 +37,29 @@ export async function getInventory(branchId = "all") {
     //   query = query.eq('stock.branch_id', branchId);
     // }
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+
+    // Fallback query if 'is_online' column doesn't exist yet
+    if (error) {
+      console.warn("Primary inventory query failed (likely missing new columns), using fallback...", error.message);
+      const fallbackQuery = supabase
+        .from("products")
+        .select(`
+          *,
+          categories ( name ),
+          stock (
+            id,
+            branch_id,
+            quantity,
+            branches ( name )
+          )
+        `)
+        .order("created_at", { ascending: false });
+        
+      const fallbackResult = await fallbackQuery;
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       console.error("Error fetching inventory:", error);
@@ -174,7 +200,11 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
         sku: productData.sku,
         category_id: catData?.id,
         retail_price: productData.retailPrice,
-        purchase_price: productData.purchasePrice
+        purchase_price: productData.purchasePrice,
+        is_online: productData.isOnline || false,
+        is_featured: productData.isFeatured || false,
+        image_url: productData.imageUrl || null,
+        description: productData.description || null
       };
 
       const { data: product, error: prodError } = await supabase
@@ -249,6 +279,10 @@ export async function updateProduct(productId, productData, initialStockMap) {
         category_id: catData?.id,
         retail_price: productData.retailPrice,
         purchase_price: productData.purchasePrice,
+        is_online: productData.isOnline !== undefined ? productData.isOnline : false,
+        is_featured: productData.isFeatured !== undefined ? productData.isFeatured : false,
+        image_url: productData.imageUrl || null,
+        description: productData.description || null
       })
       .eq("id", productId);
 

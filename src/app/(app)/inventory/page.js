@@ -25,7 +25,7 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("Semua");
   const [sortBy, setSortBy] = useState("name");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stocks: {}, colors: "" });
+  const [addForm, setAddForm] = useState({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stocks: {}, colors: "", isOnline: false, isFeatured: false, imageUrl: "", description: "" });
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -128,6 +128,10 @@ export default function InventoryPage() {
           category: p.category,
           buyPrice: p.purchase_price,
           sellPrice: p.retail_price,
+          isOnline: p.is_online || false,
+          isFeatured: p.is_featured || false,
+          imageUrl: p.image_url || "",
+          description: p.description || "",
           stocks,
           originalStock: p.stock,
           imeiStrings: p.imeiStrings
@@ -246,6 +250,10 @@ export default function InventoryPage() {
             category: addForm.category,
             purchasePrice: Number(addForm.buyPrice),
             retailPrice: Number(addForm.sellPrice),
+            isOnline: addForm.isOnline,
+            isFeatured: addForm.isFeatured,
+            imageUrl: addForm.imageUrl,
+            description: addForm.description
           },
           stockData,
           currentImeiList
@@ -259,7 +267,7 @@ export default function InventoryPage() {
 
       alert(`Berhasil menambah ${colors.length} produk varian!`);
       setShowAddForm(false);
-      setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stocks: {}, colors: "" });
+      setAddForm({ name: "", sku: "", category: "HP", buyPrice: "", sellPrice: "", stocks: {}, colors: "", isOnline: false, isFeatured: false, imageUrl: "", description: "" });
       setImeiList([]);
       window.location.reload();
     } catch (err) {
@@ -313,6 +321,10 @@ export default function InventoryPage() {
           category: editForm.category,
           purchasePrice: Number(editForm.buyPrice),
           retailPrice: Number(editForm.sellPrice),
+          isOnline: editForm.isOnline,
+          isFeatured: editForm.isFeatured,
+          imageUrl: editForm.imageUrl,
+          description: editForm.description
         },
         stockData
       );
@@ -600,6 +612,26 @@ export default function InventoryPage() {
               <label className="text-[10px] text-white/40 uppercase font-bold">Harga Jual (Rp)</label>
               <input type="number" className="input-field font-bold text-indigo-400" placeholder="0" value={addForm.sellPrice} onChange={e => setAddForm({...addForm, sellPrice: e.target.value})} />
             </div>
+            <div className="flex items-center gap-3">
+              <input type="checkbox" id="addIsOnline" className="w-5 h-5 accent-indigo-500 rounded bg-white/5 border-white/10" checked={addForm.isOnline} onChange={e => setAddForm({...addForm, isOnline: e.target.checked})} />
+              <label htmlFor="addIsOnline" className="text-xs font-bold text-white/80 cursor-pointer">Tampilkan di Website</label>
+            </div>
+            {addForm.isOnline && (
+              <>
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" id="addIsFeatured" className="w-5 h-5 accent-emerald-500 rounded bg-white/5 border-white/10" checked={addForm.isFeatured} onChange={e => setAddForm({...addForm, isFeatured: e.target.checked})} />
+                  <label htmlFor="addIsFeatured" className="text-xs font-bold text-emerald-400 cursor-pointer">Jadikan Banner Utama (Hero)</label>
+                </div>
+                <div className="flex flex-col gap-1.5 lg:col-span-2">
+                  <label className="text-[10px] text-indigo-300 uppercase font-bold">URL Gambar (Opsional)</label>
+                  <input className="input-field border-indigo-500/30" placeholder="https://..." value={addForm.imageUrl} onChange={e => setAddForm({...addForm, imageUrl: e.target.value})} />
+                </div>
+                <div className="flex flex-col gap-1.5 lg:col-span-4">
+                  <label className="text-[10px] text-indigo-300 uppercase font-bold">Deskripsi Produk (Website)</label>
+                  <textarea className="input-field border-indigo-500/30 min-h-[80px]" placeholder="Deskripsi untuk toko online..." value={addForm.description} onChange={e => setAddForm({...addForm, description: e.target.value})} />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">
@@ -1038,6 +1070,26 @@ export default function InventoryPage() {
                 <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Harga Jual</label>
                 <input className="input-field tabular-nums font-bold text-indigo-400" type="number" value={editForm.sellPrice} onChange={e => setEditForm({...editForm, sellPrice: e.target.value})} />
               </div>
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="editIsOnline" className="w-5 h-5 accent-indigo-500 rounded bg-white/5 border-white/10" checked={editForm.isOnline} onChange={e => setEditForm({...editForm, isOnline: e.target.checked})} />
+                <label htmlFor="editIsOnline" className="text-xs font-bold text-white/80 cursor-pointer">Tampilkan di Website</label>
+              </div>
+              {editForm.isOnline && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" id="editIsFeatured" className="w-5 h-5 accent-emerald-500 rounded bg-white/5 border-white/10" checked={editForm.isFeatured} onChange={e => setEditForm({...editForm, isFeatured: e.target.checked})} />
+                    <label htmlFor="editIsFeatured" className="text-xs font-bold text-emerald-400 cursor-pointer">Jadikan Banner Utama (Hero)</label>
+                  </div>
+                  <div className="flex flex-col gap-1.5 lg:col-span-2">
+                    <label className="text-[10px] text-indigo-300 uppercase font-bold">URL Gambar (Opsional)</label>
+                    <input className="input-field border-indigo-500/30" placeholder="https://..." value={editForm.imageUrl || ''} onChange={e => setEditForm({...editForm, imageUrl: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-1.5 lg:col-span-3">
+                    <label className="text-[10px] text-indigo-300 uppercase font-bold">Deskripsi Produk (Website)</label>
+                    <textarea className="input-field border-indigo-500/30 min-h-[80px]" placeholder="Deskripsi untuk toko online..." value={editForm.description || ''} onChange={e => setEditForm({...editForm, description: e.target.value})} />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-8">

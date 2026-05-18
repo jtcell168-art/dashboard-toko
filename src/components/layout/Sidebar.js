@@ -32,6 +32,11 @@ const MENU = [
     ],
   },
   {
+    label: "Pesanan Online",
+    icon: "shopping_cart_checkout",
+    href: "/online-orders",
+  },
+  {
     label: "Diskon",
     icon: "sell",
     href: "/discount",
