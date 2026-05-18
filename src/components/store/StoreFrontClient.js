@@ -249,12 +249,20 @@ export default function StoreFrontClient({ products }) {
                 </div>
 
                 {/* Product Image Container */}
-                <div className="h-64 flex items-center justify-center bg-white/[0.02] rounded-2xl p-4 overflow-hidden relative">
+                <div className="h-64 flex items-center justify-center bg-white rounded-2xl p-4 overflow-hidden relative">
                   {activeHeroProduct?.image ? (
                     <img 
                       src={activeHeroProduct.image} 
                       alt={activeHeroProduct.name} 
-                      className="max-h-full max-w-full object-contain transform group-hover:scale-105 transition-transform duration-500 drop-shadow-2xl"
+                      className={`max-h-full max-w-full object-contain drop-shadow-2xl ${
+                        activeHeroProduct.category.toLowerCase().includes("aksesori") || 
+                        activeHeroProduct.category.toLowerCase().includes("sparepart") ||
+                        activeHeroProduct.category.toLowerCase().includes("servis") ||
+                        activeHeroProduct.category.toLowerCase().includes("lcd") ||
+                        activeHeroProduct.category.toLowerCase().includes("part")
+                          ? 'accessory-crop-img' 
+                          : 'transform group-hover:scale-105 transition-transform duration-500'
+                      }`}
                     />
                   ) : (
                     <div className="text-white/20 flex flex-col items-center">
@@ -345,12 +353,16 @@ export default function StoreFrontClient({ products }) {
                 className="group glass-card border border-white/5 hover:border-indigo-500/30 transition-all duration-300 cursor-pointer overflow-hidden animate-fade-slide-up"
                 style={{ animationDelay: `${idx * 100}ms` }}
               >
-                <div className="relative h-56 overflow-hidden bg-white/5 p-4 flex items-center justify-center">
+                <div className="relative h-56 overflow-hidden bg-white p-4 flex items-center justify-center">
                   {product.image ? (
                     <img 
                       src={product.image} 
                       alt={product.name} 
-                      className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-500 drop-shadow-xl"
+                      className={`max-w-full max-h-full object-contain drop-shadow-xl ${
+                        product.category.toLowerCase().includes("aksesori") || isSparepart
+                          ? 'accessory-crop-img' 
+                          : 'group-hover:scale-105 transition-transform duration-500'
+                      }`}
                     />
                   ) : (
                     <div className="text-white/20 flex flex-col items-center">

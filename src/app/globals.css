@@ -118,6 +118,17 @@ body {
 .animate-count-up { animation: countUp 0.5s ease-out forwards; }
 .animate-slide-down { animation: slideDown 0.3s ease-out forwards; }
 
+/* Dynamic Watermark Crop Utility for Accessories & Spareparts */
+.accessory-crop-img {
+  clip-path: inset(11% 0 14% 0);
+  transform: scale(1.32) translateY(-1%) !important;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.group:hover .accessory-crop-img {
+  transform: scale(1.4) translateY(-1%) !important;
+}
+
 /* Stagger children */
 .stagger-children > * {
   opacity: 0;
