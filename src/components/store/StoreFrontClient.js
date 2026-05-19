@@ -42,7 +42,6 @@ export default function StoreFrontClient({ products }) {
     setCart((prev) => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) return prev; // Cannot add more than stock
         return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
       return [...prev, { ...product, quantity: 1 }];
@@ -59,9 +58,7 @@ export default function StoreFrontClient({ products }) {
     if (newQty < 1) return removeFromCart(id);
     setCart(prev => prev.map(item => {
       if (item.id === id) {
-        // limit by stock
-        const qty = newQty > item.stock ? item.stock : newQty;
-        return { ...item, quantity: qty };
+        return { ...item, quantity: newQty };
       }
       return item;
     }));
@@ -376,19 +373,11 @@ export default function StoreFrontClient({ products }) {
                       <span className="text-[10px] mt-2">No Image</span>
                     </div>
                   )}
-                  {isPreOrder ? (
+                  {isPreOrder && (
                     <div className="absolute top-3 left-3 bg-amber-500/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-white shadow-lg shadow-amber-500/20">
                       PRE-ORDER
                     </div>
-                  ) : product.stock <= 5 && product.stock > 0 ? (
-                    <div className="absolute top-3 left-3 bg-rose-500/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-white shadow-lg shadow-rose-500/20">
-                      Sisa {product.stock}
-                    </div>
-                  ) : product.stock === 0 ? (
-                    <div className="absolute top-3 left-3 bg-zinc-800/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-white shadow-lg">
-                      Habis Terjual
-                    </div>
-                  ) : null}
+                  )}
                 </div>
                 <div className="p-5">
                   <p className="text-[10px] text-indigo-400 font-bold mb-1 uppercase tracking-widest">{product.category}</p>
@@ -425,12 +414,7 @@ export default function StoreFrontClient({ products }) {
                     ) : (
                       <button 
                         onClick={() => addToCart(product)}
-                        disabled={product.stock === 0}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                          product.stock > 0 
-                            ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/20 active:scale-95' 
-                            : 'bg-white/5 text-white/20 cursor-not-allowed'
-                        }`}
+                        className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/20 active:scale-95"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {cart.some(item => item.id === product.id) ? 'check' : 'add_shopping_cart'}
