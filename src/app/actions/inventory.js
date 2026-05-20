@@ -198,50 +198,50 @@ export async function addProduct(productData, initialStockMap, imeiList = []) {
     // 1. Cek apakah SKU sudah ada
     const { data: existingProduct } = await supabase
       .from("products")
-      .select("id")
+      .select("id, name")
       .eq("sku", productData.sku)
       .maybeSingle();
 
-    let productId;
-
     if (existingProduct) {
-      productId = existingProduct.id;
-      // Clear old stock if product already exists to ensure fresh start
-      await supabase.from("stock").delete().eq("product_id", productId);
-    } else {
-      const insertData = {
-        name: productData.name,
-        sku: productData.sku,
-        category_id: catData?.id,
-        retail_price: productData.retailPrice,
-        purchase_price: productData.purchasePrice,
-        is_online: productData.isOnline || false,
-        is_featured: productData.isFeatured || false,
-        image_url: decodeWafSafe(productData.imageUrl) || null,
-        description: decodeWafSafe(productData.description) || null
+      return { 
+        success: false, 
+        error: `SKU "${productData.sku}" sudah terdaftar untuk produk "${existingProduct.name}". Harap gunakan SKU yang berbeda dan unik untuk setiap varian produk!` 
       };
+    }
 
-      let { data: product, error: prodError } = await supabase
+    let productId;
+    const insertData = {
+      name: productData.name,
+      sku: productData.sku,
+      category_id: catData?.id,
+      retail_price: productData.retailPrice,
+      purchase_price: productData.purchasePrice,
+      is_online: productData.isOnline || false,
+      is_featured: productData.isFeatured || false,
+      image_url: decodeWafSafe(productData.imageUrl) || null,
+      description: decodeWafSafe(productData.description) || null
+    };
+
+    let { data: product, error: prodError } = await supabase
+      .from("products")
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (prodError && prodError.message.includes('is_featured')) {
+      // Fallback: insert without is_featured
+      const { is_featured, ...fallbackInsertData } = insertData;
+      const { data: fbProduct, error: fbProdError } = await supabase
         .from("products")
-        .insert(insertData)
+        .insert(fallbackInsertData)
         .select()
         .single();
-
-      if (prodError && prodError.message.includes('is_featured')) {
-        // Fallback: insert without is_featured
-        const { is_featured, ...fallbackInsertData } = insertData;
-        const { data: fbProduct, error: fbProdError } = await supabase
-          .from("products")
-          .insert(fallbackInsertData)
-          .select()
-          .single();
-        product = fbProduct;
-        prodError = fbProdError;
-      }
-
-      if (prodError) return { success: false, error: `Gagal menyimpan produk: ${prodError.message}` };
-      productId = product.id;
+      product = fbProduct;
+      prodError = fbProdError;
     }
+
+    if (prodError) return { success: false, error: `Gagal menyimpan produk: ${prodError.message}` };
+    productId = product.id;
 
     // 2. Update atau Insert Stok per Cabang
     if (initialStockMap) {

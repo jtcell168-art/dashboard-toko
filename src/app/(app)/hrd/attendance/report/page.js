@@ -24,21 +24,32 @@ export default async function AttendanceReportPage({ searchParams }) {
   const supabase = await createClient();
   const { data: branches } = await supabase.from("branches").select("id, name").eq("is_active", true);
 
-  const today = new Date().toISOString().split('T')[0];
-  const mode     = searchParams.mode     || 'daily';
-  const date     = searchParams.date     || today;
-  const startDate = searchParams.startDate || today;
-  const endDate   = searchParams.endDate   || today;
-  const branchId  = searchParams.branchId  || 'all';
+  // Next.js 15+: searchParams is a Promise — must be awaited
+  const sp = await searchParams;
+
+  // Use WITA (GMT+8) for server-side "today" default
+  const witaToday = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const mode      = sp.mode      || 'daily';
+  const date      = sp.date      || witaToday;
+  const startDate = sp.startDate || witaToday;
+  const endDate   = sp.endDate   || witaToday;
+  const branchId  = sp.branchId  || 'all';
 
   let dailyData  = [];
   let rangeData  = [];
 
   if (mode === 'range') {
     const { data, error } = await getAttendanceRangeSummary(startDate, endDate, branchId);
+    if (error) {
+      console.error("DEBUG RANGE ERROR:", error);
+    }
     if (!error) rangeData = data || [];
   } else {
     const { data, error } = await getAttendanceReport(date, branchId);
+    if (error) {
+      console.error("DEBUG DAILY ERROR:", error);
+    }
     if (!error) dailyData = data || [];
   }
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
 function fmt(d) { if (!d) return "-"; return new Date(d).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' }); }
@@ -276,8 +276,8 @@ export default function AttendanceReportClient({ dailyData, rangeData, branches,
                 {rangeData.length===0
                   ? <tr><td colSpan="8" className="px-4 py-8 text-center text-gray-500">Tidak ada data untuk rentang tanggal ini.</td></tr>
                   : rangeData.map(row=>(
-                    <>
-                      <tr key={row.profile_id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors text-gray-300 cursor-pointer"
+                    <Fragment key={row.profile_id}>
+                      <tr className="border-t border-white/5 hover:bg-white/[0.02] transition-colors text-gray-300 cursor-pointer"
                         onClick={()=>setExpanded(e=>({...e,[row.profile_id]:!e[row.profile_id]}))}>
                         <td className="px-4 py-3">
                           <span className="material-symbols-outlined text-[16px] text-gray-500 transition-transform" style={{display:'block',transform:expanded[row.profile_id]?'rotate(90deg)':'rotate(0)'}}>chevron_right</span>
@@ -299,7 +299,7 @@ export default function AttendanceReportClient({ dailyData, rangeData, branches,
                           <td className="px-4 py-2 text-xs font-medium">{d.deduction>0?<span className="text-red-400">{rp(d.deduction)}</span>:'-'}</td>
                         </tr>
                       ))}
-                    </>
+                    </Fragment>
                   ))
                 }
               </tbody>
