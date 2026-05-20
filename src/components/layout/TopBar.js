@@ -77,7 +77,7 @@ export default function TopBar({ sidebarWidth = 256, onMobileMenuToggle, user })
           <img 
             src="/logo-jtcell.png" 
             alt="JT" 
-            className="w-7 h-7 object-contain filter invert" 
+            className="w-7 h-7 object-contain rounded-full" 
           />
           <span className="text-lg font-bold tracking-tight"
             style={{

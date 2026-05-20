@@ -69,7 +69,7 @@ export default function LoginPage() {
           <img 
             src="/logo-jtcell.png" 
             alt="JT CELL Logo" 
-            className="w-20 h-20 mx-auto mb-2 object-contain filter invert" 
+            className="w-20 h-20 mx-auto mb-2 object-contain rounded-full" 
           />
           <h1 className="text-2xl font-bold text-white tracking-tight">JT CELL GROUP</h1>
           <p className="text-sm text-white/40 mt-1">Smart System untuk Penjualan & Servis</p>

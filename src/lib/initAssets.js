@@ -17,18 +17,56 @@ export function initPremiumAssets() {
       { src: 'media__1779118957919.png', dest: 'peta-flores.png', dir: srcDir }
     ];
 
-    // Check if premium logo exists in current conversation dir and map it to all relevant icon and logo destinations
+    // Check if perfect original glow premium logo exists, fallback to solid black, solid circle, circular, clean cropped, uncropped premium, then to old logo
+    const perfectGlowLogoSrc = 'logo_jtcell_perfect_glow_1779285547865.png';
+    const solidBlackBgLogoSrc = 'logo_jtcell_solid_black_bg_1779285382702.png';
+    const solidCircleLogoSrc = 'logo_jtcell_solid_circle_1779285276155.png';
+    const circleLogoSrc = 'logo_jtcell_circle_1779285037010.png';
+    const cleanLogoSrc = 'logo_jtcell_clean_1779284818300.png';
     const premiumLogoSrc = 'logo_jtcell_premium_1779284084835.png';
+    
+    const perfectGlowLogoPath = path.join(activeConvoDir, perfectGlowLogoSrc);
+    const solidBlackBgLogoPath = path.join(activeConvoDir, solidBlackBgLogoSrc);
+    const solidCircleLogoPath = path.join(activeConvoDir, solidCircleLogoSrc);
+    const circleLogoPath = path.join(activeConvoDir, circleLogoSrc);
+    const cleanLogoPath = path.join(activeConvoDir, cleanLogoSrc);
     const premiumLogoSrcPath = path.join(activeConvoDir, premiumLogoSrc);
 
-    if (fs.existsSync(premiumLogoSrcPath)) {
-      const premiumDestinations = [
-        'logo-jtcell-uploaded.png',
-        'logo-jtcell.png',
-        'icon-192.png',
-        'icon-512.png',
-        'apple-touch-icon.png'
-      ];
+    const premiumDestinations = [
+      'logo-jtcell-uploaded.png',
+      'logo-jtcell.png',
+      'icon-192.png',
+      'icon-512.png',
+      'apple-touch-icon.png'
+    ];
+
+    if (fs.existsSync(perfectGlowLogoPath)) {
+      console.log('Perfect original glow premium logo found, configuring high-resolution assets...');
+      premiumDestinations.forEach(dest => {
+        files.push({ src: perfectGlowLogoSrc, dest: dest, dir: activeConvoDir });
+      });
+    } else if (fs.existsSync(solidBlackBgLogoPath)) {
+      console.log('Solid black background circular premium logo found, configuring high-resolution assets...');
+      premiumDestinations.forEach(dest => {
+        files.push({ src: solidBlackBgLogoSrc, dest: dest, dir: activeConvoDir });
+      });
+    } else if (fs.existsSync(solidCircleLogoPath)) {
+      console.log('Solid circular premium logo found, configuring high-resolution assets...');
+      premiumDestinations.forEach(dest => {
+        files.push({ src: solidCircleLogoSrc, dest: dest, dir: activeConvoDir });
+      });
+    } else if (fs.existsSync(circleLogoPath)) {
+      console.log('Circular premium logo found, configuring high-resolution assets...');
+      premiumDestinations.forEach(dest => {
+        files.push({ src: circleLogoSrc, dest: dest, dir: activeConvoDir });
+      });
+    } else if (fs.existsSync(cleanLogoPath)) {
+      console.log('Clean cropped premium logo found, configuring high-resolution transparent assets...');
+      premiumDestinations.forEach(dest => {
+        files.push({ src: cleanLogoSrc, dest: dest, dir: activeConvoDir });
+      });
+    } else if (fs.existsSync(premiumLogoSrcPath)) {
+      console.log('Fallback: Uncropped premium logo found, configuring assets...');
       premiumDestinations.forEach(dest => {
         files.push({ src: premiumLogoSrc, dest: dest, dir: activeConvoDir });
       });

@@ -97,12 +97,11 @@ export default function StoreFrontClient({ products }) {
       <nav className="fixed top-0 w-full z-50 bg-[#0A0E1A]/80 backdrop-blur-md border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 overflow-hidden p-1">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 overflow-hidden p-0.5">
               <img 
                 src="/logo-jtcell-uploaded.png" 
                 alt="JTCell Logo" 
-                className="w-full h-full object-contain mix-blend-screen scale-125"
-                style={{ filter: "invert(1) brightness(2) drop-shadow(0 0 5px rgba(255,255,255,0.7))" }}
+                className="w-full h-full object-contain rounded-full scale-105"
               />
             </div>
             <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
@@ -672,12 +671,11 @@ export default function StoreFrontClient({ products }) {
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-[#0A0E1A] border border-white/5 flex items-center justify-center overflow-hidden p-0.5 shadow-lg shadow-indigo-500/5">
+              <div className="w-8 h-8 rounded-full bg-[#0A0E1A] border border-white/5 flex items-center justify-center overflow-hidden p-0.5 shadow-lg shadow-indigo-500/5">
                 <img 
                   src="/logo-jtcell-uploaded.png" 
                   alt="JTCell Logo" 
-                  className="w-full h-full object-contain mix-blend-screen scale-125"
-                  style={{ filter: "invert(1) brightness(2) drop-shadow(0 0 3px rgba(255,255,255,0.7))" }}
+                  className="w-full h-full object-contain rounded-full scale-105"
                 />
               </div>
               <span className="text-lg font-bold">JTCell</span>

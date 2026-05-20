@@ -191,7 +191,7 @@ export default function Sidebar({ collapsed, onToggle, user, isMobile = false })
           <img 
             src="/logo-jtcell.png" 
             alt="JT CELL" 
-            className="w-9 h-9 shrink-0 object-contain filter invert group-hover:scale-110 transition-transform" 
+            className="w-9 h-9 shrink-0 object-contain rounded-full group-hover:scale-110 transition-transform" 
           />
           {!collapsed && (
             <span
