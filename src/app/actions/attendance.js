@@ -71,6 +71,7 @@ export async function startBreak() {
   if (!user) return { error: "Not authenticated" };
 
   const supabase = await createClient();
+  const now = new Date();
   const dateStr = getWitaDateStr();
 
   const { data, error } = await supabase
@@ -91,6 +92,7 @@ export async function endBreak() {
   if (!user) return { error: "Not authenticated" };
 
   const supabase = await createClient();
+  const now = new Date();
   const dateStr = getWitaDateStr();
 
   const { data, error } = await supabase
@@ -111,6 +113,7 @@ export async function checkOut() {
   if (!user) return { error: "Not authenticated" };
 
   const supabase = await createClient();
+  const now = new Date();
   const dateStr = getWitaDateStr();
 
   const { data, error } = await supabase
