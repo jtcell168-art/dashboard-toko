@@ -363,16 +363,50 @@ export async function updateProduct(productId, productData, initialStockMap) {
 
 // DELETE PRODUCT
 export async function deleteProduct(productId) {
-  const supabase = await createClient();
-  const user = await getCurrentUser();
-  const role = (user?.role || "").toLowerCase();
-  if (!user || (role !== "owner" && role !== "manager")) {
-    throw new Error("Unauthorized. Hanya Owner atau Manager yang bisa menghapus data.");
-  }
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    const role = (user?.role || "").toLowerCase();
+    if (!user || (role !== "owner" && role !== "manager")) {
+      return { success: false, error: "Unauthorized. Hanya Owner atau Manager yang bisa menghapus data." };
+    }
 
-  const { error } = await supabase.from("products").delete().eq("id", productId);
-  if (error) throw new Error(error.message);
-  return true;
+    // 1. Hapus IMEI records terlebih dahulu (foreign key ke products)
+    const { error: imeiError } = await supabase
+      .from("imei_records")
+      .delete()
+      .eq("product_id", productId);
+    if (imeiError) console.warn("Gagal hapus IMEI records:", imeiError.message);
+
+    // 2. Hapus stock records
+    const { error: stockError } = await supabase
+      .from("stock")
+      .delete()
+      .eq("product_id", productId);
+    if (stockError) console.warn("Gagal hapus stock:", stockError.message);
+
+    // 3. Hapus price history
+    const { error: priceError } = await supabase
+      .from("price_history")
+      .delete()
+      .eq("product_id", productId);
+    if (priceError) console.warn("Gagal hapus price history:", priceError.message);
+
+    // 4. Hapus online_order_items jika ada (set null atau hapus)
+    const { error: oiError } = await supabase
+      .from("online_order_items")
+      .delete()
+      .eq("product_id", productId);
+    if (oiError) console.warn("Gagal hapus online order items:", oiError.message);
+
+    // 5. Hapus produk utama
+    const { error } = await supabase.from("products").delete().eq("id", productId);
+    if (error) return { success: false, error: error.message };
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 }
 
 // UPDATE PRODUCT PRICE WITH HISTORY

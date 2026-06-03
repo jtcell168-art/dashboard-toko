@@ -352,13 +352,17 @@ export default function InventoryPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Yakin ingin hapus produk ini?")) return;
+    if (!confirm("Yakin ingin hapus produk ini? Semua data stok dan IMEI produk ini juga akan dihapus.")) return;
     try {
-      await deleteProduct(id);
-      alert("Produk dihapus!");
+      const result = await deleteProduct(id);
+      if (result?.success === false) {
+        alert("Gagal hapus produk: " + result.error);
+        return;
+      }
+      alert("Produk berhasil dihapus!");
       window.location.reload();
     } catch (err) {
-      alert(err.message);
+      alert("Error sistem: " + err.message);
     }
   };
 
