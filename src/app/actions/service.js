@@ -7,29 +7,20 @@ export async function getSpareparts(branchId = "all") {
   try {
     const supabase = await createClient();
 
-    // Get category ID for 'Sparepart'
-    const { data: sparepartCat } = await supabase
-      .from("categories")
-      .select("id")
-      .ilike("name", "Sparepart")
-      .maybeSingle();
-
-    if (!sparepartCat) return [];
-
-    // Fetch products in Sparepart category with stock
+    // Fetch products in Sparepart categories with stock
     const { data: products, error } = await supabase
       .from("products")
       .select(`
         id, name, sku, purchase_price, retail_price,
-        categories ( name ),
+        categories!inner ( name ),
         stock (
           branch_id,
           quantity,
           branches ( name )
         )
       `)
-      .eq("category_id", sparepartCat.id)
       .eq("is_active", true)
+      .ilike("categories.name", "%Sparepart%")
       .order("name", { ascending: true });
 
     if (error) {
@@ -77,6 +68,35 @@ export async function getSpareparts(branchId = "all") {
   }
 }
 
+// Fetch service tickets for tracking
+export async function getServiceTickets(branchId = "all") {
+  try {
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Unauthorized");
+
+    let query = supabase
+      .from("service_tickets")
+      .select("*, service_ticket_parts(*), profiles:technician_id(full_name), branches(name)")
+      .order("created_at", { ascending: false });
+
+    if (branchId !== "all") {
+      query = query.eq("branch_id", branchId);
+    } else if (user.role !== "owner" && user.role !== "manager") {
+      // Regular staff only sees their branch
+      query = query.eq("branch_id", user.branch_id);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching service tickets:", err);
+    return [];
+  }
+}
+
 // Create service ticket and deduct sparepart stock
 export async function createServiceTicket(ticketData) {
   try {
@@ -116,6 +136,7 @@ export async function createServiceTicket(ticketData) {
     const { data: ticket, error: ticketError } = await supabase
       .from("service_tickets")
       .insert({
+        ticket_no: `SRV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         customer_name: customerName,
         customer_phone: phoneNumber,
         device_type: deviceType,

@@ -54,7 +54,6 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       .order("created_at", { ascending: false })
       .limit(5);
     
-    if (isTeknisi) transactionsQuery.eq("type", "service");
     if (targetBranchId) transactionsQuery.eq("branch_id", targetBranchId);
     if (startDate) transactionsQuery.gte("created_at", startDate);
     if (endDate) transactionsQuery.lte("created_at", endDate + "T23:59:59");
@@ -66,7 +65,6 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       .select("total")
       .eq("status", "completed");
     
-    if (isTeknisi) revenueQuery.eq("type", "service");
     if (targetBranchId) revenueQuery.eq("branch_id", targetBranchId);
     if (startDate) revenueQuery.gte("created_at", startDate);
     if (endDate) revenueQuery.lte("created_at", endDate + "T23:59:59");
@@ -126,10 +124,16 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       if (doneTickets && doneTickets.length > 0) {
         // Get parts purchase prices for profit calculation
         const ticketIds = doneTickets.map(t => t.id);
-        const { data: usedParts } = await supabase
-          .from("service_ticket_parts")
-          .select("ticket_id, quantity, unit_price, product_id, products(purchase_price)")
-          .in("ticket_id", ticketIds);
+        let usedParts = [];
+        try {
+          const { data, error } = await supabase
+            .from("service_ticket_parts")
+            .select("ticket_id, quantity, unit_price, product_id, products(purchase_price)")
+            .in("ticket_id", ticketIds);
+          if (!error && data) usedParts = data;
+        } catch (e) {
+          console.error("Error fetching parts:", e);
+        }
 
         doneTickets.forEach(t => {
           const svcFee = Number(t.estimated_cost || 0); // jasa servis
@@ -167,7 +171,6 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       .eq("status", "completed")
       .gte("created_at", sevenDaysAgo.toISOString());
     
-    if (isTeknisi) salesHistoryQuery.eq("type", "service");
     if (targetBranchId) salesHistoryQuery.eq("branch_id", targetBranchId);
     const { data: last7DaysTrx } = await salesHistoryQuery;
     
@@ -229,7 +232,6 @@ export async function getDashboardData(startDate, endDate, selectedBranchId = "a
       .eq("status", "completed")
       .gte("created_at", startDate || new Date().toISOString().split("T")[0]);
     
-    if (isTeknisi) branchRevenueQuery.eq("type", "service");
     if (targetBranchId) branchRevenueQuery.eq("branch_id", targetBranchId);
     const { data: branchRevenueData } = await branchRevenueQuery;
     

@@ -42,14 +42,24 @@ export async function upsertSalary(payload) {
 export async function getTotalSalaries(startDate, endDate, branchId = null) {
   const supabase = await createClient();
   // Join with profiles to get the branch_id of the employee
-  let query = supabase.from("salaries").select("total_paid, profiles!inner(branch_id)");
+  let query = supabase.from("salaries").select("base_salary, bonus, deductions, created_at, profiles!inner(branch_id)");
   
-  if (startDate) query = query.gte("paid_at", startDate);
-  if (endDate) query = query.lte("paid_at", endDate);
+  if (startDate) query = query.gte("created_at", startDate);
+  if (endDate) query = query.lte("created_at", endDate + "T23:59:59");
   if (branchId) query = query.eq("profiles.branch_id", branchId);
   
-  const { data } = await query;
-  return data?.reduce((sum, s) => sum + Number(s.total_paid), 0) || 0;
+  const { data, error } = await query;
+  if (error) {
+    console.error("getTotalSalaries error:", error);
+    return 0;
+  }
+  
+  return data?.reduce((sum, s) => {
+    const base = Number(s.base_salary || 0);
+    const bonus = Number(s.bonus || 0);
+    const deductions = Number(s.deductions || 0);
+    return sum + (base + bonus - deductions);
+  }, 0) || 0;
 }
 
 export async function getEmployees() {

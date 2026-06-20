@@ -5,6 +5,7 @@ import Stepper from "@/components/ui/Stepper";
 import { getSpareparts, createServiceTicket } from "@/app/actions/service";
 import { addProduct } from "@/app/actions/inventory";
 import { useBranch } from "@/context/BranchContext";
+import ServiceTracking from "@/components/pos/ServiceTracking";
 import { formatRupiah } from "@/data/mockData";
 
 const STEPS = [
@@ -52,6 +53,7 @@ const initialFormData = {
 
 export default function ServicePage() {
   const { selectedBranch } = useBranch();
+  const [activeTab, setActiveTab] = useState("baru"); // 'baru' or 'antrean'
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
@@ -154,15 +156,37 @@ export default function ServicePage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-6 stagger-children">
-      {/* Header */}
+    <div className={`mx-auto flex flex-col gap-6 stagger-children transition-all duration-300 w-full ${activeTab === "antrean" ? "max-w-6xl" : "max-w-2xl"}`}>
+      {/* Header & Tabs */}
       <div>
-        <h1 className="text-xl md:text-2xl font-bold text-white">Service Ticket</h1>
-        <p className="text-sm text-white/40 mt-0.5">Buat tiket servis perangkat baru.</p>
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-white">Service Center</h1>
+            <p className="text-sm text-white/40 mt-0.5">Kelola penerimaan dan status tiket servis.</p>
+          </div>
+          <div className="flex bg-white/5 p-1 rounded-xl">
+            <button 
+              onClick={() => setActiveTab("baru")}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "baru" ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              Buat Tiket Baru
+            </button>
+            <button 
+              onClick={() => setActiveTab("antrean")}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === "antrean" ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              Antrean & Riwayat
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Stepper */}
-      <Stepper steps={STEPS} currentStep={currentStep} />
+      {activeTab === "antrean" ? (
+        <ServiceTracking branchId={selectedBranch} />
+      ) : (
+        <>
+          {/* Stepper */}
+          <Stepper steps={STEPS} currentStep={currentStep} />
 
       {/* Form Content */}
       <div className="animate-fade-slide-up" key={currentStep}>
@@ -211,6 +235,8 @@ export default function ServicePage() {
           </button>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
