@@ -1,11 +1,12 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "./auth";
 
 // Get sparepart products from inventory with stock info
 export async function getSpareparts(branchId = "all") {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Fetch products in Sparepart categories with stock
     const { data: products, error } = await supabase
@@ -189,7 +190,8 @@ export async function createServiceTicket(ticketData) {
           // Fallback if RPC fails or not yet created
           if (rpcError) {
             console.warn("RPC decrement_stock failed in service, using manual fallback.", rpcError);
-            const { data: currentStock } = await supabase
+            const adminSupabase = createAdminClient();
+            const { data: currentStock } = await adminSupabase
               .from("stock")
               .select("quantity")
               .eq("product_id", part.id)
@@ -199,7 +201,7 @@ export async function createServiceTicket(ticketData) {
             const oldQty = currentStock?.quantity || 0;
             const newQty = Math.max(0, oldQty - part.qty);
 
-            await supabase.from("stock").upsert(
+            await adminSupabase.from("stock").upsert(
               {
                 product_id: part.id,
                 branch_id: targetBranch,
@@ -250,14 +252,15 @@ export async function updateServiceStatus(ticketId, newStatus) {
         // Fallback
         if (rpcError) {
           console.warn("RPC increment_stock failed, manual fallback.", rpcError);
-          const { data: currentStock } = await supabase
+          const adminSupabase = createAdminClient();
+          const { data: currentStock } = await adminSupabase
             .from("stock")
             .select("quantity")
             .eq("product_id", part.product_id)
             .eq("branch_id", ticket.branch_id)
             .maybeSingle();
 
-          await supabase.from("stock").upsert({
+          await adminSupabase.from("stock").upsert({
             product_id: part.product_id,
             branch_id: ticket.branch_id,
             quantity: (currentStock?.quantity || 0) + part.quantity,
