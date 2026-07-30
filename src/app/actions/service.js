@@ -4,27 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "./auth";
 
 // Get sparepart products from inventory with stock info
-export async function getSpareparts(branchId = "all") {
+// NOTE: No branch filtering — total stock across all branches is returned.
+// Since all sparepart stock is stored at Ruteng, this is safe and simpler.
+export async function getSpareparts() {
   try {
     let supabase;
     try {
       supabase = createAdminClient();
     } catch {
+      // Fallback jika SUPABASE_SERVICE_ROLE_KEY tidak tersedia
       supabase = await createClient();
-    }
-
-    // Resolve branchId from server session to avoid localStorage/context mismatch.
-    // If branchId is "all", use the logged-in user's own branch_id (for technicians).
-    let effectiveBranchId = branchId;
-    if (!effectiveBranchId || effectiveBranchId === "all") {
-      try {
-        const user = await getCurrentUser();
-        if (user?.branch_id) {
-          effectiveBranchId = user.branch_id;
-        }
-      } catch {
-        // Keep "all" if we can't resolve user
-      }
     }
 
     const { data: products, error } = await supabase
@@ -45,33 +34,15 @@ export async function getSpareparts(branchId = "all") {
       return [];
     }
 
+    // Filter hanya produk kategori Sparepart
     const filteredProducts = (products || []).filter(p => {
       const catName = (Array.isArray(p.categories) ? p.categories[0]?.name : p.categories?.name) || "";
       return catName.toLowerCase().includes("sparepart");
     });
 
     return filteredProducts.map(p => {
-      // Group stock by branch
-      const branchStockMap = {};
-      (p.stock || []).forEach(s => {
-        if (!branchStockMap[s.branch_id]) {
-          branchStockMap[s.branch_id] = {
-            branch_id: s.branch_id,
-            branch_name: s.branches?.name || "Unknown",
-            quantity: 0,
-          };
-        }
-        branchStockMap[s.branch_id].quantity += Number(s.quantity || 0);
-      });
-
-      let stockEntries = Object.values(branchStockMap);
-
-      // Filter by effective branch
-      if (effectiveBranchId && effectiveBranchId !== "all") {
-        stockEntries = stockEntries.filter(s => s.branch_id === effectiveBranchId);
-      }
-
-      const totalStock = stockEntries.reduce((sum, s) => sum + s.quantity, 0);
+      // Jumlahkan stok dari SEMUA cabang (tidak difilter per cabang)
+      const totalStock = (p.stock || []).reduce((sum, s) => sum + Number(s.quantity || 0), 0);
 
       return {
         id: p.id,
@@ -81,9 +52,8 @@ export async function getSpareparts(branchId = "all") {
         retailPrice: p.retail_price || 0,
         category: p.categories?.name || "Sparepart",
         totalStock,
-        stockByBranch: stockEntries,
       };
-    });
+    }).filter(p => p.totalStock > 0); // Hanya tampilkan yang stoknya ada
   } catch (err) {
     console.error("Critical error in getSpareparts:", err);
     return [];

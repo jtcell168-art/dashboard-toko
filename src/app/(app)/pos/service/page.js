@@ -63,7 +63,7 @@ export default function ServicePage() {
 
   useEffect(() => {
     setPartsLoading(true);
-    getSpareparts(selectedBranch).then(data => { setSpareparts(data); setPartsLoading(false); });
+    getSpareparts().then(data => { setSpareparts(data); setPartsLoading(false); });
   }, [selectedBranch]);
 
   const updateField = useCallback((field, value) => {
@@ -139,7 +139,7 @@ export default function ServicePage() {
         alert("Tiket servis berhasil dibuat! Stok sparepart otomatis berkurang.");
         setCurrentStep(0);
         setFormData(initialFormData);
-        getSpareparts(selectedBranch).then(setSpareparts);
+        getSpareparts().then(setSpareparts);
       } else {
         alert("Gagal: " + res.error);
       }
