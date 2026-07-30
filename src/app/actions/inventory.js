@@ -16,10 +16,12 @@ function decodeWafSafe(str) {
 }
 
 
+import { createAdminClient } from "@/lib/supabase/admin";
+
 // GET INVENTORY
 export async function getInventory(branchId = "all") {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const user = await getCurrentUser();
     
     // Fetch branches for mapping if needed
