@@ -36,7 +36,7 @@ export async function getPosProducts(branchId = "all") {
           quantity
         )
       `)
-      .eq("is_active", true);
+      .or("is_active.eq.true,is_active.is.null");
 
     if (error) {
       console.error("Error fetching POS products:", error);

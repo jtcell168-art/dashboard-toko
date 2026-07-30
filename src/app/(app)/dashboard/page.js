@@ -401,7 +401,7 @@ export default function DashboardPage() {
               <div className="h-4 w-40 bg-white/10 rounded mb-4" />
               <div className="h-[220px] bg-white/[0.03] rounded-xl flex items-end gap-2 p-4">
                 {Array.from({ length: 7 }).map((_, j) => (
-                  <div key={j} className="flex-1 bg-white/10 rounded-t" style={{ height: `${30 + Math.random() * 60}%` }} />
+                  <div key={j} className="flex-1 bg-white/10 rounded-t" style={{ height: `${30 + ((j * 17) % 60)}%` }} />
                 ))}
               </div>
             </div>

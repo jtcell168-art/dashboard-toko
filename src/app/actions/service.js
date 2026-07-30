@@ -8,20 +8,17 @@ export async function getSpareparts(branchId = "all") {
   try {
     const supabase = createAdminClient();
 
-    // Fetch products in Sparepart categories with stock
     const { data: products, error } = await supabase
       .from("products")
       .select(`
         id, name, sku, purchase_price, retail_price,
-        categories!inner ( name ),
+        categories ( name ),
         stock (
           branch_id,
           quantity,
           branches ( name )
         )
       `)
-      .eq("is_active", true)
-      .ilike("categories.name", "%Sparepart%")
       .order("name", { ascending: true });
 
     if (error) {
@@ -29,7 +26,12 @@ export async function getSpareparts(branchId = "all") {
       return [];
     }
 
-    return (products || []).map(p => {
+    const filteredProducts = (products || []).filter(p => {
+      const catName = (Array.isArray(p.categories) ? p.categories[0]?.name : p.categories?.name) || "";
+      return catName.toLowerCase().includes("sparepart");
+    });
+
+    return filteredProducts.map(p => {
       // Group stock by branch
       const branchStockMap = {};
       (p.stock || []).forEach(s => {

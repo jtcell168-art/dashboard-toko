@@ -5,9 +5,9 @@ import { getCurrentUser } from "./auth";
 export async function getPurchaseOrderData() {
     const supabase = await createClient();
     const [suppliers, branches, products] = await Promise.all([
-        supabase.from("suppliers").select("*").eq("is_active", true),
-        supabase.from("branches").select("*").eq("is_active", true),
-        supabase.from("products").select("*").eq("is_active", true),
+        supabase.from("suppliers").select("*").or("is_active.eq.true,is_active.is.null"),
+        supabase.from("branches").select("*").or("is_active.eq.true,is_active.is.null"),
+        supabase.from("products").select("*").or("is_active.eq.true,is_active.is.null"),
     ]);
     return {
         suppliers: suppliers.data || [],
