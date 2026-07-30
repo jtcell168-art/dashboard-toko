@@ -6,10 +6,16 @@ import { getCurrentUser } from "./auth";
 // Get sparepart products from inventory with stock info
 export async function getSpareparts(branchId = "all") {
   try {
-    // Use regular client — product data is public/readable without admin privileges.
-    // Using createAdminClient() here would fail silently in production if
-    // SUPABASE_SERVICE_ROLE_KEY is not set in the hosting environment variables.
-    const supabase = await createClient();
+    // Admin client diperlukan untuk membaca tabel `stock` yang terlindungi RLS.
+    // Tanpa ini, teknisi tidak bisa melihat stok cabang mereka (stok akan 0).
+    // Pastikan SUPABASE_SERVICE_ROLE_KEY terdaftar di environment variables Vercel.
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch {
+      // Fallback jika SUPABASE_SERVICE_ROLE_KEY tidak tersedia (misal: preview env)
+      supabase = await createClient();
+    }
 
     const { data: products, error } = await supabase
       .from("products")
