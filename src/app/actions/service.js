@@ -6,7 +6,10 @@ import { getCurrentUser } from "./auth";
 // Get sparepart products from inventory with stock info
 export async function getSpareparts(branchId = "all") {
   try {
-    const supabase = createAdminClient();
+    // Use regular client — product data is public/readable without admin privileges.
+    // Using createAdminClient() here would fail silently in production if
+    // SUPABASE_SERVICE_ROLE_KEY is not set in the hosting environment variables.
+    const supabase = await createClient();
 
     const { data: products, error } = await supabase
       .from("products")
