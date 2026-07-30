@@ -6,15 +6,25 @@ import { getCurrentUser } from "./auth";
 // Get sparepart products from inventory with stock info
 export async function getSpareparts(branchId = "all") {
   try {
-    // Admin client diperlukan untuk membaca tabel `stock` yang terlindungi RLS.
-    // Tanpa ini, teknisi tidak bisa melihat stok cabang mereka (stok akan 0).
-    // Pastikan SUPABASE_SERVICE_ROLE_KEY terdaftar di environment variables Vercel.
     let supabase;
     try {
       supabase = createAdminClient();
     } catch {
-      // Fallback jika SUPABASE_SERVICE_ROLE_KEY tidak tersedia (misal: preview env)
       supabase = await createClient();
+    }
+
+    // Resolve branchId from server session to avoid localStorage/context mismatch.
+    // If branchId is "all", use the logged-in user's own branch_id (for technicians).
+    let effectiveBranchId = branchId;
+    if (!effectiveBranchId || effectiveBranchId === "all") {
+      try {
+        const user = await getCurrentUser();
+        if (user?.branch_id) {
+          effectiveBranchId = user.branch_id;
+        }
+      } catch {
+        // Keep "all" if we can't resolve user
+      }
     }
 
     const { data: products, error } = await supabase
@@ -56,9 +66,9 @@ export async function getSpareparts(branchId = "all") {
 
       let stockEntries = Object.values(branchStockMap);
 
-      // Filter by branch if specified
-      if (branchId && branchId !== "all") {
-        stockEntries = stockEntries.filter(s => s.branch_id === branchId);
+      // Filter by effective branch
+      if (effectiveBranchId && effectiveBranchId !== "all") {
+        stockEntries = stockEntries.filter(s => s.branch_id === effectiveBranchId);
       }
 
       const totalStock = stockEntries.reduce((sum, s) => sum + s.quantity, 0);
